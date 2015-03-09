@@ -1,1 +1,2 @@
+v1.0.0.3: Renamed program from SecureParser to Secure2Csv.
 v1.0.0.2: First official version.

@@ -66,8 +66,10 @@ DAceSIDofTrustee: The SID of a trustee.
 
 
 Usage
-The gui is quite intuitive. An $SDS file is mandatory, and needs to be extracted in advance. Supplying either $SDH or $SII as input will speed up the processing due to the format of $SDS which contains 2 sets of all descriptors.
+The gui is quite intuitive. An $SDS file is mandatory. Supplying either $SDH or $SII as input will speed up the processing due to the format of $SDS which contains 2 sets of all descriptors.
 It is possible to specify the default output variable separator, as well as the ACE separator which must be different than the other one (see explanation above for why there will be several ACE's).
 
-
+How to get the input files
+This tool will do; https://github.com/jschicht/ExtractAllAttributes
+But likely several other tools will do it too.
 

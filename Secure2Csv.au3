@@ -1,8 +1,10 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
+#AutoIt3Wrapper_Icon=..\..\..\Program Files (x86)\autoit-v3.3.14.2\Icons\au3script_v9.ico
 #AutoIt3Wrapper_UseUpx=y
+#AutoIt3Wrapper_Change2CUI=y
 #AutoIt3Wrapper_Res_Comment=Decode NTFS $Secure information ($SDS)
 #AutoIt3Wrapper_Res_Description=Decode NTFS $Secure information ($SDS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.5
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.6
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 ;https://technet.microsoft.com/en-us/library/cc781716(v=ws.10).aspx
@@ -19,9 +21,10 @@
 #Include <WinAPIEx.au3>
 #Include <Array.au3>
 #include <GuiEdit.au3>
+#Include <File.au3>
 
 Global $SDHArray[1][1],$SIIArray[1][1]
-Global $de="|",$de2=":",$SecureCsvFile,$hSecureCsv,$WithQuotes=0,$EncodingWhenOpen=2;34=unicode,2=ansi
+Global $de="|",$de2=":",$SecureCsvFile,$hSecureCsv,$WithQuotes=0,$EncodingWhenOpen=2,$OutputPath=@ScriptDir,$SeparatorInput,$AceSeparatorInput
 Global $TargetSDSOffsetHex,$SecurityDescriptorHash,$SecurityId,$ControlText,$SidOwner,$SidGroup
 Global $SAclRevision,$SAceCount,$SAceTypeText,$SAceFlagsText,$SAceMask,$SAceObjectType,$SAceInheritedObjectType,$SAceSIDString,$SAceObjectFlagsText
 Global $DAclRevision,$DAceCount,$DAceTypeText,$DAceFlagsText,$DAceMask,$DAceObjectType,$DAceInheritedObjectType,$DAceSIDString,$DAceObjectFlagsText
@@ -37,87 +40,112 @@ Global Const $WS_VSCROLL = 0x00200000
 Global Const $DT_END_ELLIPSIS = 0x8000
 Global Const $GUI_DISABLE = 128
 
-Opt("GUICloseOnESC", 1)
-$Form = GUICreate("NTFS $Secure Parser - Secure2Csv - 1.0.0.5", 540, 460, -1, -1)
+$Progversion = "NTFS $Secure Parser - Secure2Csv - 1.0.0.6"
 
-$LabelSDS = GUICtrlCreateLabel("$SDS:",20,10,80,20)
-$SDSField = GUICtrlCreateInput("mandatory",70,10,350,20)
-GUICtrlSetState($SDSField, $GUI_DISABLE)
-$ButtonSDS = GUICtrlCreateButton("Select $SDS", 430, 10, 100, 20)
+If $cmdline[0] > 0 Then
+	$CommandlineMode = 1
+	ConsoleWrite($Progversion & @CRLF)
+	_GetInputParams()
+	_Main()
+Else
+	DllCall("kernel32.dll", "bool", "FreeConsole")
+	$CommandlineMode = 0
 
-$LabelSDH = GUICtrlCreateLabel("$SDH:",20,35,80,20)
-$SDHField = GUICtrlCreateInput("optional",70,35,350,20)
-GUICtrlSetState($SDHField, $GUI_DISABLE)
-$ButtonSDH = GUICtrlCreateButton("Select $SDH", 430, 35, 100, 20)
-;GUICtrlSetState($ButtonSDH, $GUI_DISABLE)
+	Opt("GUICloseOnESC", 1)
+	$Form = GUICreate($Progversion, 540, 460, -1, -1)
 
-$LabelSII = GUICtrlCreateLabel("$SII:",20,60,80,20)
-$SIIField = GUICtrlCreateInput("optional",70,60,350,20)
-GUICtrlSetState($SIIField, $GUI_DISABLE)
-$ButtonSII = GUICtrlCreateButton("Select $SII", 430, 60, 100, 20)
+	$LabelSDS = GUICtrlCreateLabel("$SDS:",20,10,80,20)
+	$SDSField = GUICtrlCreateInput("mandatory",70,10,350,20)
+	GUICtrlSetState($SDSField, $GUI_DISABLE)
+	$ButtonSDS = GUICtrlCreateButton("Select $SDS", 430, 10, 100, 20)
 
-$LabelSeparator = GUICtrlCreateLabel("Set output field separator:",20,100,130,20)
-$SeparatorInput = GUICtrlCreateInput($de,150,100,20,20)
-$SeparatorInput2 = GUICtrlCreateInput($de,180,100,30,20)
-GUICtrlSetState($SeparatorInput2, $GUI_DISABLE)
+	$LabelSDH = GUICtrlCreateLabel("$SDH:",20,35,80,20)
+	$SDHField = GUICtrlCreateInput("optional",70,35,350,20)
+	GUICtrlSetState($SDHField, $GUI_DISABLE)
+	$ButtonSDH = GUICtrlCreateButton("Select $SDH", 430, 35, 100, 20)
+	;GUICtrlSetState($ButtonSDH, $GUI_DISABLE)
 
-$LabelAceSeparator = GUICtrlCreateLabel("Set Ace separator:",20,125,130,20)
-$AceSeparatorInput = GUICtrlCreateInput($de2,150,125,20,20)
-$AceSeparatorInput2 = GUICtrlCreateInput($de2,180,125,30,20)
-GUICtrlSetState($AceSeparatorInput2, $GUI_DISABLE)
+	$LabelSII = GUICtrlCreateLabel("$SII:",20,60,80,20)
+	$SIIField = GUICtrlCreateInput("optional",70,60,350,20)
+	GUICtrlSetState($SIIField, $GUI_DISABLE)
+	$ButtonSII = GUICtrlCreateButton("Select $SII", 430, 60, 100, 20)
 
-$ButtonStart = GUICtrlCreateButton("Start", 430, 115, 100, 30)
-$myctredit = GUICtrlCreateEdit("", 0, 150, 540, 120, BitOr($ES_AUTOVSCROLL,$WS_VSCROLL))
-_GUICtrlEdit_SetLimitText($myctredit, 128000)
-GUISetState(@SW_SHOW)
+	$LabelSeparator = GUICtrlCreateLabel("Set output field separator:",20,100,130,20)
+	$SeparatorInput = GUICtrlCreateInput($de,150,100,20,20)
+	$SeparatorInput2 = GUICtrlCreateInput($de,180,100,30,20)
+	GUICtrlSetState($SeparatorInput2, $GUI_DISABLE)
 
-While 1
-	$nMsg = GUIGetMsg()
-	Sleep(100)
-	_TranslateSeparator()
-	_TranslateSeparatorAce()
+	$LabelAceSeparator = GUICtrlCreateLabel("Set Ace separator:",20,125,130,20)
+	$AceSeparatorInput = GUICtrlCreateInput($de2,150,125,20,20)
+	$AceSeparatorInput2 = GUICtrlCreateInput($de2,180,125,30,20)
+	GUICtrlSetState($AceSeparatorInput2, $GUI_DISABLE)
 
-	Select
-		Case $nMsg = $ButtonSDS
-			_SelectSDS()
-		Case $nMsg = $ButtonSDH
-			_SelectSDH()
-		Case $nMsg = $ButtonSII
-			_SelectSII()
-		Case $nMsg = $ButtonStart
-			_Main()
-		Case $nMsg = $GUI_EVENT_CLOSE
-			Exit
-	EndSelect
-WEnd
+	$ButtonOutput = GUICtrlCreateButton("Output path", 430, 85, 100, 25)
+	$ButtonStart = GUICtrlCreateButton("Start", 430, 115, 100, 30)
+	$myctredit = GUICtrlCreateEdit("", 0, 150, 540, 120, BitOr($ES_AUTOVSCROLL,$WS_VSCROLL))
+	_GUICtrlEdit_SetLimitText($myctredit, 128000)
+	GUISetState(@SW_SHOW)
+
+	While 1
+		$nMsg = GUIGetMsg()
+		Sleep(100)
+		_TranslateSeparator()
+		_TranslateSeparatorAce()
+
+		Select
+			Case $nMsg = $ButtonSDS
+				_SelectSDS()
+			Case $nMsg = $ButtonSDH
+				_SelectSDH()
+			Case $nMsg = $ButtonSII
+				_SelectSII()
+			Case $nMsg = $ButtonOutput
+				$OutputPath = FileSelectFolder("Select output folder.", "",7,@ScriptDir)
+				If Not @error And FileExists($OutputPath)=1 then
+					_DisplayInfo("New output folder: " & $OutputPath & @CRLF)
+				Else
+					_DisplayInfo("Error setting new output path" & @CRLF)
+					$OutputPath = @ScriptDir
+				EndIf
+			Case $nMsg = $ButtonStart
+				_Main()
+			Case $nMsg = $GUI_EVENT_CLOSE
+				Exit
+		EndSelect
+	WEnd
+EndIf
 
 Func _Main()
 	Local $nBytes
-	GUICtrlSetData($ProgressSDS, 0)
-	GUICtrlSetData($ProgressSDH, 0)
-	GUICtrlSetData($ProgressSII, 0)
-
-	If $SDSFile = "" Then
-		_DisplayInfo("Error: $SDS must be set" & @crlf)
-		Return
+	If Not $CommandlineMode Then
+		GUICtrlSetData($ProgressSDS, 0)
+		GUICtrlSetData($ProgressSDH, 0)
+		GUICtrlSetData($ProgressSII, 0)
 	EndIf
 
-	If StringLen(GUICtrlRead($SeparatorInput)) <> 1 Then
-		_DisplayInfo("Error: Separator not set properly" & @crlf)
-		ConsoleWrite("Error: Separator not set properly: " & GUICtrlRead($SeparatorInput) & @crlf)
-		Return
-	Else
-		$de = GUICtrlRead($SeparatorInput)
-		ConsoleWrite("Using separator: " & $de & @crlf)
-	EndIf
+	If Not $CommandlineMode Then
+		If $SDSFile = "" Or FileExists($SDSFile)=0 Then
+			_DisplayInfo("Error: $SDS must be set" & @crlf)
+			Return
+		EndIf
 
-	If StringLen(GUICtrlRead($AceSeparatorInput)) <> 1 Then
-		_DisplayInfo("Error: Ace separator not set properly" & @crlf)
-		ConsoleWrite("Error: Ace separator not set properly: " & GUICtrlRead($AceSeparatorInput) & @crlf)
-		Return
-	Else
-		$de2 = GUICtrlRead($AceSeparatorInput)
-		ConsoleWrite("Using Ace separator: " & $de2 & @crlf)
+		If StringLen(GUICtrlRead($SeparatorInput)) <> 1 Then
+			_DisplayInfo("Error: Separator not set properly" & @crlf)
+			ConsoleWrite("Error: Separator not set properly: " & GUICtrlRead($SeparatorInput) & @crlf)
+			Return
+		Else
+			$de = GUICtrlRead($SeparatorInput)
+			ConsoleWrite("Using separator: " & $de & @crlf)
+		EndIf
+
+		If StringLen(GUICtrlRead($AceSeparatorInput)) <> 1 Then
+			_DisplayInfo("Error: Ace separator not set properly" & @crlf)
+			ConsoleWrite("Error: Ace separator not set properly: " & GUICtrlRead($AceSeparatorInput) & @crlf)
+			Return
+		Else
+			$de2 = GUICtrlRead($AceSeparatorInput)
+			ConsoleWrite("Using Ace separator: " & $de2 & @crlf)
+		EndIf
 	EndIf
 
 	If $DoSDH=0 And $DoSII=0 Then
@@ -128,42 +156,53 @@ Func _Main()
 	$hSDS = _WinAPI_CreateFile("\\.\" & $SDSFile,2,2,7)
 	If $hSDS = 0 Then
 		ConsoleWrite("Error in CreateFile for " & $SDSFile & " : " & _WinAPI_GetLastErrorMessage())
-		_DisplayInfo("Error in CreateFile for " & $SDSFile & " : " & _WinAPI_GetLastErrorMessage())
+		If Not $CommandlineMode Then _DisplayInfo("Error in CreateFile for " & $SDSFile & " : " & _WinAPI_GetLastErrorMessage())
 		Return
 	EndIf
 	$SizeSDS = _WinAPI_GetFileSizeEx($hSDS)
 	ConsoleWrite("$SizeSDS: " & $SizeSDS & @CRLF)
-	_DisplayInfo("Using $SDS: " & $SDSFile & @crlf)
+	If Not $CommandlineMode Then _DisplayInfo("Using $SDS: " & $SDSFile & @crlf)
 
 	$TimestampStart = @YEAR & "-" & @MON & "-" & @MDAY & "_" & @HOUR & "-" & @MIN & "-" & @SEC
-	$SecureCsvFile = @ScriptDir & "\"&$TimestampStart&"_Secure"&".csv"
+	$SecureCsvFile = $OutputPath & "\Secure_"&$TimestampStart&".csv"
 	$hSecureCsv = FileOpen($SecureCsvFile, $EncodingWhenOpen)
 	If @error Then
 		ConsoleWrite("Error creating: " & $SecureCsvFile & @CRLF)
+		If Not $CommandlineMode Then _DisplayInfo("Error creating: " & $SecureCsvFile & @CRLF)
 		Return
 	EndIf
+
+	$SecureSqlFile = $OutputPath & "\Secure_"&$TimestampStart&".sql"
+	FileInstall("C:\temp\import-csv-secure.sql", $SecureSqlFile)
+	$FixedPath = StringReplace($SecureCsvFile,"\","\\")
+	Sleep(500)
+	_ReplaceStringInFile($SecureSqlFile,"__PathToCsv__",$FixedPath)
+	_ReplaceStringInFile($SecureSqlFile,"latin1", "utf8")
+
 	_WriteCSVHeader()
 
-	$Progress = GUICtrlCreateLabel("Decoding security descriptors in $SDS", 10, 280,540,20)
-	GUICtrlSetFont($Progress, 12)
-	$ProgressStatus = GUICtrlCreateLabel("", 10, 310, 520, 20)
-	$ElapsedTime = GUICtrlCreateLabel("", 10, 325, 520, 20)
-	$ProgressSDH = GUICtrlCreateProgress(10, 350, 520, 30)
-	$ProgressSII = GUICtrlCreateProgress(10,  385, 520, 30)
-	$ProgressSDS = GUICtrlCreateProgress(10, 420, 520, 30)
+	If Not $CommandlineMode Then
+		$Progress = GUICtrlCreateLabel("Decoding security descriptors in $SDS", 10, 280,540,20)
+		GUICtrlSetFont($Progress, 12)
+		$ProgressStatus = GUICtrlCreateLabel("", 10, 310, 520, 20)
+		$ElapsedTime = GUICtrlCreateLabel("", 10, 325, 520, 20)
+		$ProgressSDH = GUICtrlCreateProgress(10, 350, 520, 30)
+		$ProgressSII = GUICtrlCreateProgress(10,  385, 520, 30)
+		$ProgressSDS = GUICtrlCreateProgress(10, 420, 520, 30)
+	EndIf
 
 	Select
 		Case $DoSII
 			$hSII = _WinAPI_CreateFile("\\.\" & $SIIFile,2,2,7)
 			If $hSII = 0 Then
 				ConsoleWrite("Error in CreateFile for " & $SIIFile & " : " & _WinAPI_GetLastErrorMessage())
-				_DisplayInfo("Error in CreateFile for " & $SIIFile & " : " & _WinAPI_GetLastErrorMessage())
+				If Not $CommandlineMode Then _DisplayInfo("Error in CreateFile for " & $SIIFile & " : " & _WinAPI_GetLastErrorMessage())
 				Return
 			EndIf
 			$SizeSII = _WinAPI_GetFileSizeEx($hSII)
 			ConsoleWrite("$SizeSII: " & $SizeSII & @CRLF)
-			_DisplayInfo("Using $SII: " & $SIIFile & @crlf)
-			$FixedSIIEntries = @ScriptDir & "\"&$TimestampStart&"_FixedSII"&".bin"
+			If Not $CommandlineMode Then _DisplayInfo("Using $SII: " & $SIIFile & @crlf)
+			$FixedSIIEntries = $OutputPath & "\Secure_"&$TimestampStart&"_FixedSII"&".bin"
 			$hFixedSII = FileOpen($FixedSIIEntries,16+2)
 			$tBuffer3 = DllStructCreate("byte["&$SizeSII&"]")
 			_WinAPI_ReadFile($hSII, DllStructGetPtr($tBuffer3), $SizeSII, $nBytes)
@@ -185,7 +224,7 @@ Func _Main()
 			ConsoleWrite("Starting decode of $SDS" & @CRLF)
 
 			$begin = TimerInit()
-			AdlibRegister("_SDSProgress", 500)
+			If Not $CommandlineMode Then AdlibRegister("_SDSProgress", 500)
 			$MaxDescriptors=Ubound($SIIArray)-1
 			For $i = 1 To Ubound($SIIArray)-1
 				$CurrentDescriptor=$i
@@ -201,11 +240,15 @@ Func _Main()
 				;Make sure all global variables for csv are cleared
 				_ClearVar()
 			Next
-			AdlibUnRegister("_SDSProgress")
-			GUICtrlSetData($ProgressStatus, "[$SDS] Processing security descriptor " & $CurrentDescriptor & " of " & $MaxDescriptors)
-			GUICtrlSetData($ElapsedTime, "Elapsed time = " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)))
-			GUICtrlSetData($ProgressSDS, 100 * $CurrentDescriptor / $MaxDescriptors)
-			_DisplayInfo("$SDS processing finished in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
+			If Not $CommandlineMode Then
+				AdlibUnRegister("_SDSProgress")
+				GUICtrlSetData($ProgressStatus, "[$SDS] Processing security descriptor " & $CurrentDescriptor & " of " & $MaxDescriptors)
+				GUICtrlSetData($ElapsedTime, "Elapsed time = " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)))
+				GUICtrlSetData($ProgressSDS, 100 * $CurrentDescriptor / $MaxDescriptors)
+				_DisplayInfo("$SDS processed " & $CurrentDescriptor & " descriptors in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
+			Else
+				ConsoleWrite("$SDS processed " & $CurrentDescriptor & " descriptors in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
+			EndIf
 
 			_WinAPI_CloseHandle($hSDS)
 			_WinAPI_CloseHandle($hSII)
@@ -217,13 +260,13 @@ Func _Main()
 			$hSDH = _WinAPI_CreateFile("\\.\" & $SDHFile,2,2,7)
 			If $hSDH = 0 Then
 				ConsoleWrite("Error in CreateFile for " & $SDHFile & " : " & _WinAPI_GetLastErrorMessage())
-				_DisplayInfo("Error in CreateFile for " & $SDHFile & " : " & _WinAPI_GetLastErrorMessage())
+				If Not $CommandlineMode Then _DisplayInfo("Error in CreateFile for " & $SDHFile & " : " & _WinAPI_GetLastErrorMessage())
 				Return
 			EndIf
 			$SizeSDH = _WinAPI_GetFileSizeEx($hSDH)
 			ConsoleWrite("$SizeSDH: " & $SizeSDH & @CRLF)
-			_DisplayInfo("Using $SDH: " & $SDHFile & @crlf)
-			$FixedSDHEntries = @ScriptDir & "\"&$TimestampStart&"_FixedSDH"&".bin"
+			If Not $CommandlineMode Then _DisplayInfo("Using $SDH: " & $SDHFile & @crlf)
+			$FixedSDHEntries = $OutputPath & "\Secure_"&$TimestampStart&"_FixedSDH"&".bin"
 			$hFixedSDH = FileOpen($FixedSDHEntries,16+2)
 			$tBuffer2 = DllStructCreate("byte["&$SizeSDH&"]")
 			_WinAPI_ReadFile($hSDH, DllStructGetPtr($tBuffer2), $SizeSDH, $nBytes)
@@ -245,7 +288,7 @@ Func _Main()
 			ConsoleWrite("Starting decode of $SDS" & @CRLF)
 
 			$begin = TimerInit()
-			AdlibRegister("_SDSProgress", 500)
+			If Not $CommandlineMode Then AdlibRegister("_SDSProgress", 500)
 			$MaxDescriptors=Ubound($SDHArray)-1
 			For $i = 1 To Ubound($SDHArray)-1
 				$CurrentDescriptor=$i
@@ -261,11 +304,15 @@ Func _Main()
 				;Make sure all global variables for csv are cleared
 				_ClearVar()
 			Next
-			AdlibUnRegister("_SDSProgress")
-			GUICtrlSetData($ProgressStatus, "[$SDS] Processing security descriptor " & $CurrentDescriptor & " of " & $MaxDescriptors)
-			GUICtrlSetData($ElapsedTime, "Elapsed time = " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)))
-			GUICtrlSetData($ProgressSDS, 100 * $CurrentDescriptor / $MaxDescriptors)
-			_DisplayInfo("$SDS processing finished in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
+			If Not $CommandlineMode Then
+				AdlibUnRegister("_SDSProgress")
+				GUICtrlSetData($ProgressStatus, "[$SDS] Processing security descriptor " & $CurrentDescriptor & " of " & $MaxDescriptors)
+				GUICtrlSetData($ElapsedTime, "Elapsed time = " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)))
+				GUICtrlSetData($ProgressSDS, 100 * $CurrentDescriptor / $MaxDescriptors)
+				_DisplayInfo("$SDS processed " & $CurrentDescriptor & " descriptors in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
+			Else
+				ConsoleWrite("$SDS processed " & $CurrentDescriptor & " descriptors in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
+			EndIf
 
 			_WinAPI_CloseHandle($hSDS)
 			_WinAPI_CloseHandle($hSDH)
@@ -291,7 +338,7 @@ Func _Main()
 			$BytesProcessed = 0
 			$CurrentDescriptor = 0
 			$begin = TimerInit()
-			AdlibRegister("_SDSProgress", 500)
+			If Not $CommandlineMode Then AdlibRegister("_SDSProgress", 500)
 			$MaxDescriptors=$EstimatedDescriptors
 			$BigChunks = Ceiling($SizeSDS/262144)
 			While 1
@@ -343,17 +390,26 @@ Func _Main()
 				$StartOffset+=$TargetSDSSize*2
 			WEnd
 			$MaxDescriptors = $CurrentDescriptor
-			AdlibUnRegister("_SDSProgress")
-			GUICtrlSetData($ProgressStatus, "[$SDS] Processing security descriptor " & $CurrentDescriptor & " of " & $MaxDescriptors)
-			GUICtrlSetData($ElapsedTime, "Elapsed time = " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)))
-			GUICtrlSetData($ProgressSDS, 100 * $CurrentDescriptor / $MaxDescriptors)
-			_DisplayInfo("$SDS processing finished in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
+			If Not $CommandlineMode Then
+				AdlibUnRegister("_SDSProgress")
+				GUICtrlSetData($ProgressStatus, "[$SDS] Processing security descriptor " & $CurrentDescriptor & " of " & $MaxDescriptors)
+				GUICtrlSetData($ElapsedTime, "Elapsed time = " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)))
+				GUICtrlSetData($ProgressSDS, 100 * $CurrentDescriptor / $MaxDescriptors)
+				_DisplayInfo("$SDS processed " & $CurrentDescriptor & " descriptors in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
+			Else
+				ConsoleWrite("$SDS processed " & $CurrentDescriptor & " descriptors in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
+			EndIf
 
 	EndSelect
-	_DisplayInfo("Done! " & @crlf)
-	GUICtrlSetData($SDSField,"")
-	GUICtrlSetData($SIIField,"")
-	GUICtrlSetData($SDHField,"")
+
+	If Not $CommandlineMode Then
+		_DisplayInfo("Done! " & @crlf)
+		GUICtrlSetData($SDSField,"")
+		GUICtrlSetData($SIIField,"")
+		GUICtrlSetData($SDHField,"")
+	Else
+		ConsoleWrite("Done! " & @crlf)
+	EndIf
 	$DoSDH=0
 	$DoSII=0
 EndFunc
@@ -1235,4 +1291,64 @@ Func _HexToGuidStr($input)
 	$OutStr &= StringMid($input,21,12)
 	$OutStr &= "}"
 	Return $OutStr
+EndFunc
+
+Func _GetInputParams()
+	Local $TimeZone, $OutputFormat, $ScanMode
+	For $i = 1 To $cmdline[0]
+		;ConsoleWrite("Param " & $i & ": " & $cmdline[$i] & @CRLF)
+		If StringLeft($cmdline[$i],9) = "/SDSFile:" Then $SDSFile = StringMid($cmdline[$i],10)
+		If StringLeft($cmdline[$i],9) = "/SDHFile:" Then $SDHFile = StringMid($cmdline[$i],10)
+		If StringLeft($cmdline[$i],9) = "/SIIFile:" Then $SIIFile = StringMid($cmdline[$i],10)
+		If StringLeft($cmdline[$i],12) = "/OutputPath:" Then $OutputPath = StringMid($cmdline[$i],13)
+		If StringLeft($cmdline[$i],11) = "/Separator:" Then $SeparatorInput = StringMid($cmdline[$i],12)
+		If StringLeft($cmdline[$i],14) = "/AceSeparator:" Then $AceSeparatorInput = StringMid($cmdline[$i],15)
+	Next
+
+
+	If StringLen($SDSFile) > 0 Then
+		If Not FileExists($SDSFile) Then
+			ConsoleWrite("Error input $SDSFile file does not exist." & @CRLF)
+			Exit
+		EndIf
+	EndIf
+	If StringLen($SDHFile) > 0 Then
+		If Not FileExists($SDHFile) Then
+			ConsoleWrite("Error input $SDHFile file does not exist." & @CRLF)
+			;Exit
+			$DoSDH=0
+		Else
+			$DoSDH=1
+		EndIf
+	Else
+		$DoSDH=0
+	EndIf
+	If StringLen($SIIFile) > 0 Then
+		If Not FileExists($SIIFile) Then
+			ConsoleWrite("Error input $SIIFile file does not exist." & @CRLF)
+			;Exit
+			$DoSII=0
+		Else
+			$DoSII=1
+		EndIf
+	Else
+		$DoSII=0
+	EndIf
+
+	If StringLen($OutputPath) > 0 Then
+		If Not FileExists($OutputPath) Then
+			ConsoleWrite("Error input $OutputPath does not exist. Setting default to curent directory." & @CRLF)
+			$OutputPath = @ScriptDir
+		EndIf
+	Else
+		$OutputPath = @ScriptDir
+	EndIf
+
+
+	If StringLen($SeparatorInput) <> 1 Then $SeparatorInput = "|"
+	$de = $SeparatorInput
+	If StringLen($AceSeparatorInput) <> 1 Then $AceSeparatorInput = ":"
+	$de2 = $AceSeparatorInput
+
+
 EndFunc

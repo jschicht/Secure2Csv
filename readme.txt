@@ -66,10 +66,32 @@ DAceSIDofTrustee: The SID of a trustee.
 
 
 Usage
-The gui is quite intuitive. An $SDS file is mandatory. Supplying either $SDH or $SII as input will speed up the processing due to the format of $SDS which contains 2 sets of all descriptors.
+The gui is quite intuitive. An $SDS file is mandatory. Supplying either $SDH or $SII as input will speed up the processing due to the format of $SDS which contains 2 sets of all descriptors. There's an option to specify output directory.
 It is possible to specify the default output variable separator, as well as the ACE separator which must be different than the other one (see explanation above for why there will be several ACE's).
 
-How to get the input files
-This tool will do; https://github.com/jschicht/ExtractAllAttributes
-But likely several other tools will do it too.
+Command line use
+If no parameters are supplied, the GUI will by default launch. Valid switches are:
+
+Switches:
+/SDSFile:
+Target $SDS file. Mandatory.
+/SDHFile:
+Target $SDH file. Optional.
+/SIIFile:
+Target $SII file. Optional.
+/OutputPath:
+The output path to write all output to. Optional. Defaults to program directory.
+/Separator:
+The separator to use in the csv. Default is |
+/AceSeparator:
+The separator to distinguish ace's in the csv. Default is :
+
+Examples:
+Secure2Csv.exe /SDSFile:c:\temp\$Secure[ADS_$SDS] /OutputPath:c:\temp
+Secure2Csv.exe /SDSFile:c:\temp\9_$DATA_$SDS_1.bin /SDHFile:c:\temp\9_$INDEX_ALLOCATION_$SDH_1.bin /SIIFile:c:\temp\9_$INDEX_ALLOCATION_$SII_2.bin /OutputPath:c:\temp
+Secure2Csv.exe /SDSFile:c:\temp\$Secure[ADS_$SDS] /OutputPath:c:\temp /Separator:% /AceSeparator:!
+
+Note
+The file $Secure[ADS_$SDS] is the default output when using RawCopy (https://github.com/jschicht/RawCopy) to extract mft ref 9.
+The files 9_$DATA_$SDS_1.bin,9_$INDEX_ALLOCATION_$SDH_1.bin,9_$INDEX_ALLOCATION_$SII_2.bin is a typical output when using ExtractAllAttributes (https://github.com/jschicht/ExtractAllAttributes) to extract mft ref 9.
 

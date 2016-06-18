@@ -4,7 +4,7 @@
 #AutoIt3Wrapper_Change2CUI=y
 #AutoIt3Wrapper_Res_Comment=Decode NTFS $Secure information ($SDS)
 #AutoIt3Wrapper_Res_Description=Decode NTFS $Secure information ($SDS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.6
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.7
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 ;https://technet.microsoft.com/en-us/library/cc781716(v=ws.10).aspx
@@ -23,7 +23,7 @@
 #include <GuiEdit.au3>
 #Include <File.au3>
 
-Global $SDHArray[1][1],$SIIArray[1][1]
+Global $SDHArray[1][1],$SIIArray[1][1],$CommandlineMode, $DebugOutFile
 Global $de="|",$de2=":",$SecureCsvFile,$hSecureCsv,$WithQuotes=0,$EncodingWhenOpen=2,$OutputPath=@ScriptDir,$SeparatorInput,$AceSeparatorInput
 Global $TargetSDSOffsetHex,$SecurityDescriptorHash,$SecurityId,$ControlText,$SidOwner,$SidGroup
 Global $SAclRevision,$SAceCount,$SAceTypeText,$SAceFlagsText,$SAceMask,$SAceObjectType,$SAceInheritedObjectType,$SAceSIDString,$SAceObjectFlagsText
@@ -40,7 +40,7 @@ Global Const $WS_VSCROLL = 0x00200000
 Global Const $DT_END_ELLIPSIS = 0x8000
 Global Const $GUI_DISABLE = 128
 
-$Progversion = "NTFS $Secure Parser - Secure2Csv - 1.0.0.6"
+$Progversion = "NTFS $Secure Parser - Secure2Csv - 1.0.0.7"
 
 If $cmdline[0] > 0 Then
 	$CommandlineMode = 1
@@ -160,15 +160,27 @@ Func _Main()
 		Return
 	EndIf
 	$SizeSDS = _WinAPI_GetFileSizeEx($hSDS)
-	ConsoleWrite("$SizeSDS: " & $SizeSDS & @CRLF)
+
 	If Not $CommandlineMode Then _DisplayInfo("Using $SDS: " & $SDSFile & @crlf)
 
 	$TimestampStart = @YEAR & "-" & @MON & "-" & @MDAY & "_" & @HOUR & "-" & @MIN & "-" & @SEC
+
+	$DebugOutFile = FileOpen($OutputPath & "\Secure_"&$TimestampStart&".log", $EncodingWhenOpen)
+	If @error Then
+		ConsoleWrite("Error: Could not create log file" & @CRLF)
+		MsgBox(0,"Error","Could not create log file")
+		Exit
+	EndIf
+
 	$SecureCsvFile = $OutputPath & "\Secure_"&$TimestampStart&".csv"
 	$hSecureCsv = FileOpen($SecureCsvFile, $EncodingWhenOpen)
 	If @error Then
 		ConsoleWrite("Error creating: " & $SecureCsvFile & @CRLF)
-		If Not $CommandlineMode Then _DisplayInfo("Error creating: " & $SecureCsvFile & @CRLF)
+		If Not $CommandlineMode Then
+			_DisplayInfo("Error creating: " & $SecureCsvFile & @CRLF)
+		Else
+			_DumpOutput("Error creating: " & $SecureCsvFile & @CRLF)
+		EndIf
 		Return
 	EndIf
 
@@ -178,6 +190,13 @@ Func _Main()
 	Sleep(500)
 	_ReplaceStringInFile($SecureSqlFile,"__PathToCsv__",$FixedPath)
 	_ReplaceStringInFile($SecureSqlFile,"latin1", "utf8")
+
+	_DumpOutput("Using $Secure $SDS: " & $SDSFile & @CRLF)
+	_DumpOutput("Using $Secure $SDH: " & $SDHFile & @CRLF)
+	_DumpOutput("Using $Secure $SII: " & $SIIFile & @CRLF)
+	_DumpOutput("Filesize $SDS: " & $SizeSDS & @CRLF)
+	_DumpOutput("Using $SecureCsvFile: " & $SecureCsvFile & @CRLF)
+	_DumpOutput("Using $SecureSqlFile: " & $SecureSqlFile & @CRLF)
 
 	_WriteCSVHeader()
 
@@ -195,15 +214,15 @@ Func _Main()
 		Case $DoSII
 			$hSII = _WinAPI_CreateFile("\\.\" & $SIIFile,2,2,7)
 			If $hSII = 0 Then
-				ConsoleWrite("Error in CreateFile for " & $SIIFile & " : " & _WinAPI_GetLastErrorMessage())
+				_DumpOutput("Error in CreateFile for " & $SIIFile & " : " & _WinAPI_GetLastErrorMessage())
 				If Not $CommandlineMode Then _DisplayInfo("Error in CreateFile for " & $SIIFile & " : " & _WinAPI_GetLastErrorMessage())
 				Return
 			EndIf
 			$SizeSII = _WinAPI_GetFileSizeEx($hSII)
-			ConsoleWrite("$SizeSII: " & $SizeSII & @CRLF)
+			_DumpOutput("$SizeSII: " & $SizeSII & @CRLF)
 			If Not $CommandlineMode Then _DisplayInfo("Using $SII: " & $SIIFile & @crlf)
-			$FixedSIIEntries = $OutputPath & "\Secure_"&$TimestampStart&"_FixedSII"&".bin"
-			$hFixedSII = FileOpen($FixedSIIEntries,16+2)
+			;$FixedSIIEntries = $OutputPath & "\Secure_"&$TimestampStart&"_FixedSII"&".bin"
+			;$hFixedSII = FileOpen($FixedSIIEntries,16+2)
 			$tBuffer3 = DllStructCreate("byte["&$SizeSII&"]")
 			_WinAPI_ReadFile($hSII, DllStructGetPtr($tBuffer3), $SizeSII, $nBytes)
 			$RawContentSII = DllStructGetData($tBuffer3, 1)
@@ -212,16 +231,16 @@ Func _Main()
 			Else
 				$CoreSII = _GetIndx($RawContentSII)
 			EndIf
-			FileWrite($hFixedSII,"0x"&$CoreSII)
-			ConsoleWrite("Starting decode of $SII" & @CRLF)
+			;FileWrite($hFixedSII,"0x"&$CoreSII)
+			_DumpOutput("Starting decode of $SII" & @CRLF)
 			_DecodeIndxEntriesSII($CoreSII)
-			ConsoleWrite("Security descriptors referenced in $SII: " & UBound($SIIArray)-1 & @CRLF)
+			_DumpOutput("Security descriptors referenced in $SII: " & UBound($SIIArray)-1 & @CRLF)
 			;_ArrayDisplay($SIIArray,"$SIIArray")
 			;SDS
 			$tBuffer = DllStructCreate("byte["&$SizeSDS&"]")
 			_WinAPI_ReadFile($hSDS, DllStructGetPtr($tBuffer), $SizeSDS, $nBytes)
 			$RawContentSDS = DllStructGetData($tBuffer, 1)
-			ConsoleWrite("Starting decode of $SDS" & @CRLF)
+			_DumpOutput("Starting decode of $SDS" & @CRLF)
 
 			$begin = TimerInit()
 			If Not $CommandlineMode Then AdlibRegister("_SDSProgress", 500)
@@ -247,27 +266,27 @@ Func _Main()
 				GUICtrlSetData($ProgressSDS, 100 * $CurrentDescriptor / $MaxDescriptors)
 				_DisplayInfo("$SDS processed " & $CurrentDescriptor & " descriptors in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
 			Else
-				ConsoleWrite("$SDS processed " & $CurrentDescriptor & " descriptors in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
+				_DumpOutput("$SDS processed " & $CurrentDescriptor & " descriptors in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
 			EndIf
 
 			_WinAPI_CloseHandle($hSDS)
 			_WinAPI_CloseHandle($hSII)
 			FileClose($hSecureCsv)
-			FileClose($hFixedSII)
+			;FileClose($hFixedSII)
 
 
 		Case $DoSDH
 			$hSDH = _WinAPI_CreateFile("\\.\" & $SDHFile,2,2,7)
 			If $hSDH = 0 Then
-				ConsoleWrite("Error in CreateFile for " & $SDHFile & " : " & _WinAPI_GetLastErrorMessage())
+				_DumpOutput("Error in CreateFile for " & $SDHFile & " : " & _WinAPI_GetLastErrorMessage())
 				If Not $CommandlineMode Then _DisplayInfo("Error in CreateFile for " & $SDHFile & " : " & _WinAPI_GetLastErrorMessage())
 				Return
 			EndIf
 			$SizeSDH = _WinAPI_GetFileSizeEx($hSDH)
-			ConsoleWrite("$SizeSDH: " & $SizeSDH & @CRLF)
+			_DumpOutput("$SizeSDH: " & $SizeSDH & @CRLF)
 			If Not $CommandlineMode Then _DisplayInfo("Using $SDH: " & $SDHFile & @crlf)
-			$FixedSDHEntries = $OutputPath & "\Secure_"&$TimestampStart&"_FixedSDH"&".bin"
-			$hFixedSDH = FileOpen($FixedSDHEntries,16+2)
+			;$FixedSDHEntries = $OutputPath & "\Secure_"&$TimestampStart&"_FixedSDH"&".bin"
+			;$hFixedSDH = FileOpen($FixedSDHEntries,16+2)
 			$tBuffer2 = DllStructCreate("byte["&$SizeSDH&"]")
 			_WinAPI_ReadFile($hSDH, DllStructGetPtr($tBuffer2), $SizeSDH, $nBytes)
 			$RawContentSDH = DllStructGetData($tBuffer2, 1)
@@ -276,16 +295,16 @@ Func _Main()
 			Else
 				$CoreSDH = _GetIndx($RawContentSDH)
 			EndIf
-			FileWrite($hFixedSDH,"0x"&$CoreSDH)
-			ConsoleWrite("Starting decode of $SDH" & @CRLF)
+			;FileWrite($hFixedSDH,"0x"&$CoreSDH)
+			_DumpOutput("Starting decode of $SDH" & @CRLF)
 			_DecodeIndxEntriesSDH($CoreSDH)
-			ConsoleWrite("Security descriptors referenced in $SDH: " & UBound($SDHArray)-1 & @CRLF)
+			_DumpOutput("Security descriptors referenced in $SDH: " & UBound($SDHArray)-1 & @CRLF)
 			;_ArrayDisplay($SDHArray,"$SDHArray")
 			;SDS
 			$tBuffer = DllStructCreate("byte["&$SizeSDS&"]")
 			_WinAPI_ReadFile($hSDS, DllStructGetPtr($tBuffer), $SizeSDS, $nBytes)
 			$RawContentSDS = DllStructGetData($tBuffer, 1)
-			ConsoleWrite("Starting decode of $SDS" & @CRLF)
+			_DumpOutput("Starting decode of $SDS" & @CRLF)
 
 			$begin = TimerInit()
 			If Not $CommandlineMode Then AdlibRegister("_SDSProgress", 500)
@@ -311,13 +330,13 @@ Func _Main()
 				GUICtrlSetData($ProgressSDS, 100 * $CurrentDescriptor / $MaxDescriptors)
 				_DisplayInfo("$SDS processed " & $CurrentDescriptor & " descriptors in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
 			Else
-				ConsoleWrite("$SDS processed " & $CurrentDescriptor & " descriptors in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
+				_DumpOutput("$SDS processed " & $CurrentDescriptor & " descriptors in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
 			EndIf
 
 			_WinAPI_CloseHandle($hSDS)
 			_WinAPI_CloseHandle($hSDH)
 			FileClose($hSecureCsv)
-			FileClose($hFixedSDH)
+			;FileClose($hFixedSDH)
 			#cs
 			$SizeAcc=0
 			For $i = 1 To Ubound($SDHArray)-1
@@ -332,7 +351,7 @@ Func _Main()
 			$tBuffer = DllStructCreate("byte["&$SizeSDS&"]")
 			_WinAPI_ReadFile($hSDS, DllStructGetPtr($tBuffer), $SizeSDS, $nBytes)
 			$RawContentSDS = DllStructGetData($tBuffer, 1)
-			ConsoleWrite("Starting decode of $SDS" & @CRLF)
+			_DumpOutput("Starting decode of $SDS" & @CRLF)
 			$EstimatedDescriptors = Round($SizeSDS/268)
 			$StartOffset = 3
 			$BytesProcessed = 0
@@ -345,7 +364,7 @@ Func _Main()
 				$CurrentDescriptor += 1
 ;				ConsoleWrite("$CurrentDescriptor: " & $CurrentDescriptor & @CRLF)
 				If $BytesProcessed >= $SizeSDS Then
-					ConsoleWrite("End of $SDS reached" & @CRLF)
+					_DumpOutput("End of $SDS reached" & @CRLF)
 					ExitLoop
 				EndIf
 				$TargetSDSOffset = StringMid($RawContentSDS,$StartOffset + 16, 16)
@@ -355,7 +374,7 @@ Func _Main()
 				$TargetSDSSize = Dec(_SwapEndian($TargetSDSSize),2)
 
 				If $TargetSDSOffset >= $SizeSDS Then
-					ConsoleWrite("End of $SDS reached" & @CRLF)
+					_DumpOutput("End of $SDS reached" & @CRLF)
 					ExitLoop
 				EndIf
 
@@ -397,7 +416,7 @@ Func _Main()
 				GUICtrlSetData($ProgressSDS, 100 * $CurrentDescriptor / $MaxDescriptors)
 				_DisplayInfo("$SDS processed " & $CurrentDescriptor & " descriptors in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
 			Else
-				ConsoleWrite("$SDS processed " & $CurrentDescriptor & " descriptors in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
+				_DumpOutput("$SDS processed " & $CurrentDescriptor & " descriptors in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
 			EndIf
 
 	EndSelect
@@ -408,7 +427,7 @@ Func _Main()
 		GUICtrlSetData($SIIField,"")
 		GUICtrlSetData($SDHField,"")
 	Else
-		ConsoleWrite("Done! " & @crlf)
+		_DumpOutput("Done! " & @crlf)
 	EndIf
 	$DoSDH=0
 	$DoSII=0
@@ -423,7 +442,7 @@ Func _DecodeSDSChunk($InputData, $Hash)
 	$SecurityDescriptorHash = StringMid($InputData, $StartOffset, 8)
 ;	$SecurityDescriptorHash = _SwapEndian($SecurityDescriptorHash)
 	If $SecurityDescriptorHash <> $Hash Then
-		ConsoleWrite("Error: Hash mismatch" & @CRLF)
+		_DumpOutput("Error: Hash mismatch" & @CRLF)
 		Return
 	EndIf
 	$SecurityDescriptorHash = "0x" & $SecurityDescriptorHash
@@ -443,7 +462,7 @@ Func _DecodeSDSChunk($InputData, $Hash)
 
 	$Revision = Dec($Revision)
 	If $Revision <> 1 Then
-		ConsoleWrite("Error: Revision invalid: " & $Revision & @CRLF)
+		_DumpOutput("Error: Revision invalid: " & $Revision & @CRLF)
 ;		Return
 	EndIf
 	$Sbz1 = StringMid($InputData, $StartOffset + 42, 2)
@@ -454,7 +473,7 @@ Func _DecodeSDSChunk($InputData, $Hash)
 	$ControlText = _SecurityDescriptorControl("0x"&$SECURITY_DESCRIPTOR_CONTROL)
 
 	If Not BitAND("0x"&$SECURITY_DESCRIPTOR_CONTROL, $SE_SELF_RELATIVE) Then
-		ConsoleWrite("Error: Descriptor not self relative. Nothing to do" & @CRLF)
+		_DumpOutput("Error: Descriptor not self relative. Nothing to do" & @CRLF)
 		Return
 	EndIf
 	$PSidOwner = StringMid($InputData, $StartOffset + 48, 8)
@@ -511,7 +530,7 @@ Func _DecodeAcl_S($InputData)
 	$SAclRevision = StringMid($InputData, $StartOffset, 2)
 
 	If $SAclRevision <> "02" And $SAclRevision <> "04" Then
-		ConsoleWrite("Error: Invalid SAclRevision: " & $SAclRevision & @CRLF)
+		_DumpOutput("Error: Invalid SAclRevision: " & $SAclRevision & @CRLF)
 	EndIf
 	$Sbz1 = StringMid($InputData, $StartOffset + 2, 2)
 
@@ -540,10 +559,10 @@ Func _DecodeAcl_S($InputData)
 
 		$AceTypeText = _DecodeAceType(Number("0x"&$AceType))
 		If $AceTypeText = "" Then
-			ConsoleWrite("Error: AceType invalid" & @CRLF)
+			_DumpOutput("Error: AceType invalid" & @CRLF)
 ;			ContinueLoop
 		EndIf
-		If $AceTypeText = "UNKNOWN" Then ConsoleWrite("Unknown ace flags: " & $AceType & @CRLF)
+		If $AceTypeText = "UNKNOWN" Then _DumpOutput("Unknown ace flags: " & $AceType & @CRLF)
 
 		$AceFlags = StringMid($InputData, $StartOffset + $AceDataCounter + 18, 2)
 
@@ -638,7 +657,7 @@ Func _DecodeAcl_D($InputData)
 	$DAclRevision = StringMid($InputData, $StartOffset, 2)
 
 	If $DAclRevision <> "02" And $DAclRevision <> "04" Then
-		ConsoleWrite("Error: Invalid DAclRevision: " & $DAclRevision & @CRLF)
+		_DumpOutput("Error: Invalid DAclRevision: " & $DAclRevision & @CRLF)
 	EndIf
 	$Sbz1 = StringMid($InputData, $StartOffset + 2, 2)
 
@@ -667,7 +686,7 @@ Func _DecodeAcl_D($InputData)
 
 		$AceTypeText = _DecodeAceType(Number("0x"&$AceType))
 		If $AceTypeText = "" Then
-			ConsoleWrite("Error: AceType invalid" & @CRLF)
+			_DumpOutput("Error: AceType invalid" & @CRLF)
 ;			ContinueLoop
 		EndIf
 
@@ -763,14 +782,14 @@ Func _DecodeSID($InputData)
 	$Revision = StringMid($InputData, $StartOffset, 2)
 	$Revision = Dec($Revision)
 	If $Revision <> 1 Then
-		ConsoleWrite("Error: Revision invalid: " & $Revision & @CRLF)
+		_DumpOutput("Error: Revision invalid: " & $Revision & @CRLF)
 		Return SetError(1,0,0)
 	EndIf
 	$SIDString &= "-" & $Revision
 	$SubAuthorityCount = StringMid($InputData, $StartOffset + 2, 2)
 	$SubAuthorityCount = Dec($SubAuthorityCount)
 	If $SubAuthorityCount > 15 Then
-		ConsoleWrite("Error: SubAuthorityCount invalid: " & $SubAuthorityCount & @CRLF)
+		_DumpOutput("Error: SubAuthorityCount invalid: " & $SubAuthorityCount & @CRLF)
 		Return SetError(1,0,0)
 	EndIf
 	;SID_IDENTIFIER_AUTHORITY
@@ -783,7 +802,7 @@ Func _DecodeSID($InputData)
 	$SIDString &= "-" & $IdentifierAuthority
 	;SubAuthority (variable)
 	If $SubAuthorityCount < 1 Or $SubAuthorityCount > 15 Then
-		ConsoleWrite("Error: $SubAuthorityCount seems invalid: " & $SubAuthorityCount & @CRLF)
+		_DumpOutput("Error: $SubAuthorityCount seems invalid: " & $SubAuthorityCount & @CRLF)
 		Return SetError(1,0,0)
 	EndIf
 	For $j = 1 To $SubAuthorityCount
@@ -891,7 +910,7 @@ Func _DecodeIndxEntriesSDH($InputData)
 
 	$MaxDescriptors=UBound($SDHArray)-101
 	$begin = TimerInit()
-	AdlibRegister("_SDHProgress", 500)
+	If Not $CommandlineMode Then AdlibRegister("_SDHProgress", 500)
 	While 1
 		If $StartOffset >= $InputDataSize*2 Then ExitLoop
 		$Counter+=1
@@ -938,7 +957,7 @@ Func _DecodeIndxEntriesSDH($InputData)
 
 		$EndPadding = StringMid($InputData, $StartOffset + 88, 8)
 		If $EndPadding <> "49004900" Then
-			ConsoleWrite("Wrong end padding (49004900): " & $EndPadding & @CRLF)
+			_DumpOutput("Wrong end padding (49004900): " & $EndPadding & @CRLF)
 ;			Return
 		EndIf
 		$SDHArray[$Counter][0] = $OffsetInSDS
@@ -964,11 +983,15 @@ Func _DecodeIndxEntriesSDH($InputData)
 		$StartOffset += 96
 	WEnd
 	$MaxDescriptors = $CurrentDescriptor
-	AdlibUnRegister("_SDHProgress")
-	GUICtrlSetData($ProgressStatus, "[$SDH] Processing security descriptor index entry " & $CurrentDescriptor & " of " & $MaxDescriptors)
-	GUICtrlSetData($ElapsedTime, "Elapsed time = " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)))
-	GUICtrlSetData($ProgressSDH, 100 * $CurrentDescriptor / $MaxDescriptors)
-	_DisplayInfo("$SDH processing finished in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
+	If Not $CommandlineMode Then
+		AdlibUnRegister("_SDHProgress")
+		GUICtrlSetData($ProgressStatus, "[$SDH] Processing security descriptor index entry " & $CurrentDescriptor & " of " & $MaxDescriptors)
+		GUICtrlSetData($ElapsedTime, "Elapsed time = " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)))
+		GUICtrlSetData($ProgressSDH, 100 * $CurrentDescriptor / $MaxDescriptors)
+		_DisplayInfo("$SDH processing finished in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
+	Else
+		_DumpOutput("$SDH processing finished in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
+	EndIf
 	ReDim $SDHArray[$Counter+1][6]
 EndFunc
 
@@ -988,7 +1011,7 @@ Func _DecodeIndxEntriesSII($InputData)
 
 	$MaxDescriptors=UBound($SIIArray)-101
 	$begin = TimerInit()
-	AdlibRegister("_SIIProgress", 500)
+	If Not $CommandlineMode Then AdlibRegister("_SIIProgress", 500)
 	While 1
 		If $StartOffset >= BinaryLen("0x"&$InputData)*2 Then ExitLoop
 		$Counter+=1
@@ -1049,11 +1072,15 @@ Func _DecodeIndxEntriesSII($InputData)
 		$StartOffset += 80
 	WEnd
 	$MaxDescriptors = $CurrentDescriptor
-	AdlibUnRegister("_SIIProgress")
-	GUICtrlSetData($ProgressStatus, "[$SII] Processing security descriptor index entry " & $CurrentDescriptor & " of " & $MaxDescriptors)
-	GUICtrlSetData($ElapsedTime, "Elapsed time = " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)))
-	GUICtrlSetData($ProgressSII, 100 * $CurrentDescriptor / $MaxDescriptors)
-	_DisplayInfo("$SII processing finished in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
+	If Not $CommandlineMode Then
+		AdlibUnRegister("_SIIProgress")
+		GUICtrlSetData($ProgressStatus, "[$SII] Processing security descriptor index entry " & $CurrentDescriptor & " of " & $MaxDescriptors)
+		GUICtrlSetData($ElapsedTime, "Elapsed time = " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)))
+		GUICtrlSetData($ProgressSII, 100 * $CurrentDescriptor / $MaxDescriptors)
+		_DisplayInfo("$SII processing finished in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
+	Else
+		_DumpOutput("$SII processing finished in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
+	EndIf
 	ReDim $SIIArray[$Counter+1][5]
 EndFunc
 
@@ -1097,20 +1124,22 @@ Func _GetIndx($Entry)
 ;	ConsoleWrite("Expected records = " & StringLen($Entry)/8192 & @crlf)
 ;	$NextPosition = 1
 	Do
+		If $NextPosition >= StringLen($Entry) Then ExitLoop
+;		ConsoleWrite("$NextPosition = " & $NextPosition & @crlf)
 		$IndxHdrMagic = StringMid($Entry,$NextPosition,8)
 ;		ConsoleWrite("$IndxHdrMagic = " & $IndxHdrMagic & @crlf)
 		$IndxHdrMagic = _HexToString($IndxHdrMagic)
 ;		ConsoleWrite("$IndxHdrMagic = " & $IndxHdrMagic & @crlf)
 		If $IndxHdrMagic <> "INDX" Then
 ;			ConsoleWrite("$IndxHdrMagic: " & $IndxHdrMagic & @crlf)
-			ConsoleWrite("Error: Record is not of type INDX, and this was not expected.." & @crlf)
+			_DumpOutput("Error: Record is not of type INDX, and this was not expected.." & @crlf)
 			$NextPosition += 8192
 			ContinueLoop
 		EndIf
 		$IndxEntries = _StripIndxRecord(StringMid($Entry,$NextPosition,8192))
 		$TotalIndxEntries &= $IndxEntries
 		$NextPosition += 8192
-	Until $NextPosition >= StringLen($Entry)+32
+	Until $NextPosition >= StringLen($Entry);+32
 ;	ConsoleWrite("INDX record:" & @crlf)
 ;	ConsoleWrite(_HexEncode("0x"& StringMid($Entry,1)) & @crlf)
 ;	ConsoleWrite("Total chunk of stripped INDX entries:" & @crlf)
@@ -1150,7 +1179,7 @@ Func _StripIndxRecord($Entry)
 	$IndxRecordEnd7 = StringMid($Entry,7165,4)
 	$IndxRecordEnd8 = StringMid($Entry,8189,4)
 	If $IndxHdrUpdSeqArrPart0 <> $IndxRecordEnd1 OR $IndxHdrUpdSeqArrPart0 <> $IndxRecordEnd2 OR $IndxHdrUpdSeqArrPart0 <> $IndxRecordEnd3 OR $IndxHdrUpdSeqArrPart0 <> $IndxRecordEnd4 OR $IndxHdrUpdSeqArrPart0 <> $IndxRecordEnd5 OR $IndxHdrUpdSeqArrPart0 <> $IndxRecordEnd6 OR $IndxHdrUpdSeqArrPart0 <> $IndxRecordEnd7 OR $IndxHdrUpdSeqArrPart0 <> $IndxRecordEnd8 Then
-		ConsoleWrite("Error the INDX record is corrupt" & @CRLF)
+		_DumpOutput("Error the INDX record is corrupt" & @CRLF)
 		Return ; Not really correct because I think in theory chunks of 1024 bytes can be invalid and not just everything or nothing for the given INDX record.
 	Else
 		$Entry = StringMid($Entry,1,1020) & $IndxHdrUpdSeqArrPart1 & StringMid($Entry,1025,1020) & $IndxHdrUpdSeqArrPart2 & StringMid($Entry,2049,1020) & $IndxHdrUpdSeqArrPart3 & StringMid($Entry,3073,1020) & $IndxHdrUpdSeqArrPart4 & StringMid($Entry,4097,1020) & $IndxHdrUpdSeqArrPart5 & StringMid($Entry,5121,1020) & $IndxHdrUpdSeqArrPart6 & StringMid($Entry,6145,1020) & $IndxHdrUpdSeqArrPart7 & StringMid($Entry,7169,1020)
@@ -1351,4 +1380,9 @@ Func _GetInputParams()
 	$de2 = $AceSeparatorInput
 
 
+EndFunc
+
+Func _DumpOutput($text)
+   ConsoleWrite($text)
+   If $DebugOutFile Then FileWrite($DebugOutFile, $text)
 EndFunc

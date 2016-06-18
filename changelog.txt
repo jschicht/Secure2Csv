@@ -1,4 +1,10 @@
 
+v1.0.0.7
+Fixed a bug that caused commandline mode to crash when using either $SDH or $SII as input.
+Fixed a bug that caused the $SII and $SDH parsers to sometimes throw a warning about invalid INDX signature.
+Added a an output logfile for writing verbose information.
+Removed the output files Secure_<timestamp>_FixedSII.bin and Secure_<timestamp>_FixedSDH.bin that seemed useless.
+
 v1.0.0.6
 Added support for command line mode.
 Added option to specify output directory.

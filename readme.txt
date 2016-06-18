@@ -88,10 +88,10 @@ The separator to distinguish ace's in the csv. Default is :
 
 Examples:
 Secure2Csv.exe /SDSFile:c:\temp\$Secure[ADS_$SDS] /OutputPath:c:\temp
-Secure2Csv.exe /SDSFile:c:\temp\9_$DATA_$SDS_1.bin /SDHFile:c:\temp\9_$INDEX_ALLOCATION_$SDH_1.bin /SIIFile:c:\temp\9_$INDEX_ALLOCATION_$SII_2.bin /OutputPath:c:\temp
+Secure2Csv.exe /SDSFile:c:\temp\$Secure[ADS_$SDS] /SIIFile:c:\temp\$Secure_9_$INDEX_ALLOCATION_$SII.bin /OutputPath:c:\temp
 Secure2Csv.exe /SDSFile:c:\temp\$Secure[ADS_$SDS] /OutputPath:c:\temp /Separator:% /AceSeparator:!
 
 Note
-The file $Secure[ADS_$SDS] is the default output when using RawCopy (https://github.com/jschicht/RawCopy) to extract mft ref 9.
-The files 9_$DATA_$SDS_1.bin,9_$INDEX_ALLOCATION_$SDH_1.bin,9_$INDEX_ALLOCATION_$SII_2.bin is a typical output when using ExtractAllAttributes (https://github.com/jschicht/ExtractAllAttributes) to extract mft ref 9.
+The file $Secure[ADS_$SDS] and $Secure_9_$INDEX_ALLOCATION_$SII.bin are the two of default output when using RawCopy (https://github.com/jschicht/RawCopy) to extract mft ref 9 with a command such as "rawcopy.exe c:9 c:\temp -AllAttr"
+ExtractAllAttributes (https://github.com/jschicht/ExtractAllAttributes) can also be used to extract mft ref 9, but will produce slightly different filenames in the output.
 

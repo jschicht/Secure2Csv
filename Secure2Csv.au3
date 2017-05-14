@@ -1,10 +1,10 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
-#AutoIt3Wrapper_Icon=..\..\..\Program Files (x86)\autoit-v3.3.14.2\Icons\au3script_v9.ico
+#AutoIt3Wrapper_Icon=C:\Program Files (x86)\AutoIt3\Icons\au3.ico
 #AutoIt3Wrapper_UseUpx=y
 #AutoIt3Wrapper_Change2CUI=y
 #AutoIt3Wrapper_Res_Comment=Decode NTFS $Secure information ($SDS)
 #AutoIt3Wrapper_Res_Description=Decode NTFS $Secure information ($SDS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.7
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.8
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 ;https://technet.microsoft.com/en-us/library/cc781716(v=ws.10).aspx
@@ -40,7 +40,7 @@ Global Const $WS_VSCROLL = 0x00200000
 Global Const $DT_END_ELLIPSIS = 0x8000
 Global Const $GUI_DISABLE = 128
 
-$Progversion = "NTFS $Secure Parser - Secure2Csv - 1.0.0.7"
+$Progversion = "NTFS $Secure Parser - Secure2Csv - 1.0.0.8"
 
 If $cmdline[0] > 0 Then
 	$CommandlineMode = 1
@@ -185,7 +185,7 @@ Func _Main()
 	EndIf
 
 	$SecureSqlFile = $OutputPath & "\Secure_"&$TimestampStart&".sql"
-	FileInstall("C:\temp\import-csv-secure.sql", $SecureSqlFile)
+	FileInstall(".\import-sql\import-csv-secure.sql", $SecureSqlFile)
 	$FixedPath = StringReplace($SecureCsvFile,"\","\\")
 	Sleep(500)
 	_ReplaceStringInFile($SecureSqlFile,"__PathToCsv__",$FixedPath)
@@ -779,6 +779,7 @@ Func _DecodeSID($InputData)
 	;https://msdn.microsoft.com/en-us/library/cc230371.aspx
 	Local $StartOffset = 1, $SIDString = "S"
 ;	ConsoleWrite("_DecodeSID() " & @CRLF)
+;	ConsoleWrite(_HexEncode("0x"&$InputData))
 	$Revision = StringMid($InputData, $StartOffset, 2)
 	$Revision = Dec($Revision)
 	If $Revision <> 1 Then

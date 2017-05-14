@@ -1,4 +1,7 @@
 
+v1.0.0.8
+Moved the import sql files into the new import-sql sub directory so that compilation works with the project as is.
+
 v1.0.0.7
 Fixed a bug that caused commandline mode to crash when using either $SDH or $SII as input.
 Fixed a bug that caused the $SII and $SDH parsers to sometimes throw a warning about invalid INDX signature.

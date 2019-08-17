@@ -1,11 +1,17 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=C:\Program Files (x86)\AutoIt3\Icons\au3.ico
-#AutoIt3Wrapper_UseUpx=y
+#AutoIt3Wrapper_Outfile=Secure2Csv.exe
+#AutoIt3Wrapper_Outfile_x64=Secure2Csv64.exe
+#AutoIt3Wrapper_Compile_Both=y
+#AutoIt3Wrapper_UseX64=y
 #AutoIt3Wrapper_Change2CUI=y
 #AutoIt3Wrapper_Res_Comment=Decode NTFS $Secure information ($SDS)
 #AutoIt3Wrapper_Res_Description=Decode NTFS $Secure information ($SDS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.8
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.9
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
+#AutoIt3Wrapper_AU3Check_Parameters=-w 3 -w 5
+#AutoIt3Wrapper_Run_Au3Stripper=y
+#Au3Stripper_Parameters=/sf /sv /rm /pe
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 ;https://technet.microsoft.com/en-us/library/cc781716(v=ws.10).aspx
 ;http://www.ntfs.com/ntfs-permissions-file-structure.htm
@@ -40,7 +46,7 @@ Global Const $WS_VSCROLL = 0x00200000
 Global Const $DT_END_ELLIPSIS = 0x8000
 Global Const $GUI_DISABLE = 128
 
-$Progversion = "NTFS $Secure Parser - Secure2Csv - 1.0.0.8"
+Global $Progversion = "NTFS $Secure Parser - Secure2Csv - 1.0.0.9"
 
 If $cmdline[0] > 0 Then
 	$CommandlineMode = 1
@@ -60,13 +66,13 @@ Else
 	$ButtonSDS = GUICtrlCreateButton("Select $SDS", 430, 10, 100, 20)
 
 	$LabelSDH = GUICtrlCreateLabel("$SDH:",20,35,80,20)
-	$SDHField = GUICtrlCreateInput("optional",70,35,350,20)
+	$SDHField = GUICtrlCreateInput("optional, but recommended for speed",70,35,350,20)
 	GUICtrlSetState($SDHField, $GUI_DISABLE)
 	$ButtonSDH = GUICtrlCreateButton("Select $SDH", 430, 35, 100, 20)
 	;GUICtrlSetState($ButtonSDH, $GUI_DISABLE)
 
 	$LabelSII = GUICtrlCreateLabel("$SII:",20,60,80,20)
-	$SIIField = GUICtrlCreateInput("optional",70,60,350,20)
+	$SIIField = GUICtrlCreateInput("optional, but recommended for speed",70,60,350,20)
 	GUICtrlSetState($SIIField, $GUI_DISABLE)
 	$ButtonSII = GUICtrlCreateButton("Select $SII", 430, 60, 100, 20)
 
@@ -191,6 +197,7 @@ Func _Main()
 	_ReplaceStringInFile($SecureSqlFile,"__PathToCsv__",$FixedPath)
 	_ReplaceStringInFile($SecureSqlFile,"latin1", "utf8")
 
+	_DumpOutput($Progversion & @CRLF)
 	_DumpOutput("Using $Secure $SDS: " & $SDSFile & @CRLF)
 	_DumpOutput("Using $Secure $SDH: " & $SDHFile & @CRLF)
 	_DumpOutput("Using $Secure $SII: " & $SIIFile & @CRLF)
@@ -359,7 +366,7 @@ Func _Main()
 			$begin = TimerInit()
 			If Not $CommandlineMode Then AdlibRegister("_SDSProgress", 500)
 			$MaxDescriptors=$EstimatedDescriptors
-			$BigChunks = Ceiling($SizeSDS/262144)
+			;$BigChunks = Ceiling($SizeSDS/262144)
 			While 1
 				$CurrentDescriptor += 1
 ;				ConsoleWrite("$CurrentDescriptor: " & $CurrentDescriptor & @CRLF)
@@ -436,7 +443,7 @@ EndFunc
 Func _DecodeSDSChunk($InputData, $Hash)
 	;https://msdn.microsoft.com/en-us/library/cc230366.aspx
 	Local $StartOffset = 1
-	Global $SecurityDescriptorHash,$SecurityId,$ControlText,$SidOwner,$SidGroup
+	;Global $SecurityDescriptorHash,$SecurityId,$ControlText,$SidOwner,$SidGroup
 ;	ConsoleWrite("_DecodeSDSChunk() " & @CRLF)
 ;	ConsoleWrite(_HexEncode("0x"&$InputData))
 	$SecurityDescriptorHash = StringMid($InputData, $StartOffset, 8)
@@ -465,7 +472,7 @@ Func _DecodeSDSChunk($InputData, $Hash)
 		_DumpOutput("Error: Revision invalid: " & $Revision & @CRLF)
 ;		Return
 	EndIf
-	$Sbz1 = StringMid($InputData, $StartOffset + 42, 2)
+	;$Sbz1 = StringMid($InputData, $StartOffset + 42, 2)
 
 	$SECURITY_DESCRIPTOR_CONTROL = StringMid($InputData, $StartOffset + 44, 4)
 	$SECURITY_DESCRIPTOR_CONTROL = _SwapEndian($SECURITY_DESCRIPTOR_CONTROL)
@@ -523,7 +530,7 @@ EndFunc
 Func _DecodeAcl_S($InputData)
 	;https://msdn.microsoft.com/en-us/library/cc230297.aspx
 	Local $StartOffset = 1, $AceDataCounter = 0
-	Global $SAclRevision,$SAceCount,$SAceTypeText,$SAceFlagsText,$SAceMask,$SAceObjectFlagsText,$SAceObjectType,$SAceInheritedObjectType,$SAceSIDString
+	;Global $SAclRevision,$SAceCount,$SAceTypeText,$SAceFlagsText,$SAceMask,$SAceObjectFlagsText,$SAceObjectType,$SAceInheritedObjectType,$SAceSIDString
 ;	ConsoleWrite("_DecodeAcl_S() " & @CRLF)
 ;	ConsoleWrite(_HexEncode("0x"&$InputData))
 	; ACL header 8 bytes
@@ -532,7 +539,7 @@ Func _DecodeAcl_S($InputData)
 	If $SAclRevision <> "02" And $SAclRevision <> "04" Then
 		_DumpOutput("Error: Invalid SAclRevision: " & $SAclRevision & @CRLF)
 	EndIf
-	$Sbz1 = StringMid($InputData, $StartOffset + 2, 2)
+	;$Sbz1 = StringMid($InputData, $StartOffset + 2, 2)
 
 	$AclSize = StringMid($InputData, $StartOffset + 4, 4)
 	$AclSize = _SwapEndian($AclSize)
@@ -542,7 +549,7 @@ Func _DecodeAcl_S($InputData)
 	$SAceCount = _SwapEndian($SAceCount)
 
 	$SAceCount = Dec($SAceCount)
-	$Sbz2 = StringMid($InputData, $StartOffset + 12, 4)
+	;$Sbz2 = StringMid($InputData, $StartOffset + 12, 4)
 	#cs
 	ConsoleWrite("$SAclRevision: " & $SAclRevision & @CRLF)
 	ConsoleWrite("$Sbz1: " & $Sbz1 & @CRLF)
@@ -581,7 +588,7 @@ Func _DecodeAcl_S($InputData)
 		$AceSize = Dec($AceSize)
 		;Remaining bytes of ACE depends on AceType
 		$Mask=""
-		$Flags=""
+		;$Flags=""
 		$ObjectType=""
 		$InheritedObjectType=""
 		$SIDString=""
@@ -650,7 +657,7 @@ EndFunc
 Func _DecodeAcl_D($InputData)
 	;https://msdn.microsoft.com/en-us/library/cc230297.aspx
 	Local $StartOffset = 1, $AceDataCounter = 0
-	Global $DAclRevision,$DAceCount,$DAceTypeText,$DAceFlagsText,$DAceMask,$DAceObjectFlagsText,$DAceObjectType,$DAceInheritedObjectType,$DAceSIDString
+	;Global $DAclRevision,$DAceCount,$DAceTypeText,$DAceFlagsText,$DAceMask,$DAceObjectFlagsText,$DAceObjectType,$DAceInheritedObjectType,$DAceSIDString
 ;	ConsoleWrite("_DecodeAcl_D() " & @CRLF)
 ;	ConsoleWrite(_HexEncode("0x"&$InputData))
 	; ACL header 8 bytes
@@ -659,7 +666,7 @@ Func _DecodeAcl_D($InputData)
 	If $DAclRevision <> "02" And $DAclRevision <> "04" Then
 		_DumpOutput("Error: Invalid DAclRevision: " & $DAclRevision & @CRLF)
 	EndIf
-	$Sbz1 = StringMid($InputData, $StartOffset + 2, 2)
+	;$Sbz1 = StringMid($InputData, $StartOffset + 2, 2)
 
 	$AclSize = StringMid($InputData, $StartOffset + 4, 4)
 	$AclSize = _SwapEndian($AclSize)
@@ -669,7 +676,7 @@ Func _DecodeAcl_D($InputData)
 	$DAceCount = _SwapEndian($DAceCount)
 
 	$DAceCount = Dec($DAceCount)
-	$Sbz2 = StringMid($InputData, $StartOffset + 12, 4)
+	;$Sbz2 = StringMid($InputData, $StartOffset + 12, 4)
 	#cs
 	ConsoleWrite("$DAclRevision: " & $DAclRevision & @CRLF)
 	ConsoleWrite("$Sbz1: " & $Sbz1 & @CRLF)
@@ -707,7 +714,7 @@ Func _DecodeAcl_D($InputData)
 		$AceSize = Dec($AceSize)
 		;Remaining bytes of ACE depends on AceType
 		$Mask=""
-		$Flags=""
+		;$Flags=""
 		$ObjectType=""
 		$InheritedObjectType=""
 		$SIDString=""
@@ -796,7 +803,7 @@ Func _DecodeSID($InputData)
 	;SID_IDENTIFIER_AUTHORITY
 	$IdentifierAuthority = StringMid($InputData, $StartOffset + 4, 12)
 ;	ConsoleWrite("$IdentifierAuthority: " & $IdentifierAuthority & @CRLF)
-	$IdentifierAuthorityString = _DecodeSidIdentifierAuthorityString($IdentifierAuthority)
+	;$IdentifierAuthorityString = _DecodeSidIdentifierAuthorityString($IdentifierAuthority)
 
 	$IdentifierAuthority = _DecodeSidIdentifierAuthority($IdentifierAuthority)
 
@@ -823,43 +830,7 @@ EndFunc
 
 Func _DecodeSidIdentifierAuthority($InputData)
 ;	ConsoleWrite("_DecodeSidIdentifierAuthority() " & @CRLF)
-	Select
-		Case $InputData = "000000000000"
-			Return Dec($InputData)
-;			Return "0"
-		Case $InputData = "000000000001"
-			Return Dec($InputData)
-;			Return "1"
-		Case $InputData = "000000000002"
-			Return Dec($InputData)
-;			Return "2"
-		Case $InputData = "000000000003"
-			Return Dec($InputData)
-;			Return "3"
-		Case $InputData = "000000000004"
-			Return Dec($InputData)
-;			Return "4"
-		Case $InputData = "000000000005"
-			Return Dec($InputData)
-;			Return "5"
-		Case $InputData = "00000000000F"
-			Return Dec($InputData)
-;			Return "F"
-		Case $InputData = "000000000010"
-			Return Dec($InputData)
-;			Return "10"
-		Case $InputData = "000000000011"
-			Return Dec($InputData)
-;			Return "11"
-		Case $InputData = "000000000012"
-			Return Dec($InputData)
-;			Return "12"
-		Case $InputData = "000000000013"
-			Return Dec($InputData)
-;			Return "13"
-		Case Else
-			Return "UNKNOWN"
-	EndSelect
+	Return Dec($InputData)
 EndFunc
 
 Func _DecodeSidIdentifierAuthorityString($InputData)
@@ -1151,7 +1122,7 @@ EndFunc
 
 Func _StripIndxRecord($Entry)
 ;	ConsoleWrite("Starting function _StripIndxRecord()" & @crlf)
-	Local $LocalAttributeOffset = 1,$IndxHdrUpdateSeqArrOffset,$IndxHdrUpdateSeqArrSize,$IndxHdrUpdSeqArr,$IndxHdrUpdSeqArrPart0,$IndxHdrUpdSeqArrPart1,$IndxHdrUpdSeqArrPart2,$IndxHdrUpdSeqArrPart3,$IndxHdrUpdSeqArrPart4,$IndxHdrUpdSeqArrPart5,$IndxHdrUpdSeqArrPart6,$IndxHdrUpdSeqArrPart7,$IndxHdrUpdSeqArrPart8
+	Local $LocalAttributeOffset = 1,$IndxHdrUpdateSeqArrOffset,$IndxHdrUpdateSeqArrSize,$IndxHdrUpdSeqArr,$IndxHdrUpdSeqArrPart0,$IndxHdrUpdSeqArrPart1,$IndxHdrUpdSeqArrPart2,$IndxHdrUpdSeqArrPart3,$IndxHdrUpdSeqArrPart4,$IndxHdrUpdSeqArrPart5,$IndxHdrUpdSeqArrPart6,$IndxHdrUpdSeqArrPart7
 	Local $IndxRecordEnd1,$IndxRecordEnd2,$IndxRecordEnd3,$IndxRecordEnd4,$IndxRecordEnd5,$IndxRecordEnd6,$IndxRecordEnd7,$IndxRecordEnd8,$IndxRecordSize,$IndxHeaderSize,$IsNotLeafNode
 ;	ConsoleWrite("Unfixed INDX record:" & @crlf)
 ;	ConsoleWrite(_HexEncode("0x"&$Entry) & @crlf)
@@ -1170,7 +1141,7 @@ Func _StripIndxRecord($Entry)
 	$IndxHdrUpdSeqArrPart5 = StringMid($IndxHdrUpdSeqArr,21,4)
 	$IndxHdrUpdSeqArrPart6 = StringMid($IndxHdrUpdSeqArr,25,4)
 	$IndxHdrUpdSeqArrPart7 = StringMid($IndxHdrUpdSeqArr,29,4)
-	$IndxHdrUpdSeqArrPart8 = StringMid($IndxHdrUpdSeqArr,33,4)
+	;$IndxHdrUpdSeqArrPart8 = StringMid($IndxHdrUpdSeqArr,33,4)
 	$IndxRecordEnd1 = StringMid($Entry,1021,4)
 	$IndxRecordEnd2 = StringMid($Entry,2045,4)
 	$IndxRecordEnd3 = StringMid($Entry,3069,4)
@@ -1324,7 +1295,7 @@ Func _HexToGuidStr($input)
 EndFunc
 
 Func _GetInputParams()
-	Local $TimeZone, $OutputFormat, $ScanMode
+	;Local $TimeZone, $OutputFormat, $ScanMode
 	For $i = 1 To $cmdline[0]
 		;ConsoleWrite("Param " & $i & ": " & $cmdline[$i] & @CRLF)
 		If StringLeft($cmdline[$i],9) = "/SDSFile:" Then $SDSFile = StringMid($cmdline[$i],10)

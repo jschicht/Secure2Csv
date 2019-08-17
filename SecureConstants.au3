@@ -1,14 +1,14 @@
 
 ;ACE header
-$tagACCESS_ALLOWED_ACE 					= "dword Mask;dword SidStart"
-$tagACCESS_ALLOWED_CALLBACK_ACE 		= "dword Mask;dword SidStart"
-$tagACCESS_ALLOWED_CALLBACK_OBJECT_ACE 	= "dword Mask;dword Flags;GUID ObjectType;GUID InheritedObjectType;dword SidStart"
-$tagACCESS_ALLOWED_OBJECT_ACE 			= "dword Mask;dword Flags;GUID ObjectType;GUID InheritedObjectType;dword SidStart"
+Global $tagACCESS_ALLOWED_ACE 					= "dword Mask;dword SidStart"
+Global $tagACCESS_ALLOWED_CALLBACK_ACE 		= "dword Mask;dword SidStart"
+Global $tagACCESS_ALLOWED_CALLBACK_OBJECT_ACE 	= "dword Mask;dword Flags;GUID ObjectType;GUID InheritedObjectType;dword SidStart"
+Global $tagACCESS_ALLOWED_OBJECT_ACE 			= "dword Mask;dword Flags;GUID ObjectType;GUID InheritedObjectType;dword SidStart"
 
-$tagACCESS_DENIED_ACE 					= "dword Mask;dword SidStart"
-$tagACCESS_DENIED_CALLBACK_ACE 			= "dword Mask;dword SidStart"
-$tagACCESS_DENIED_CALLBACK_OBJECT_ACE 	= "dword Mask;dword Flags;GUID ObjectType;GUID InheritedObjectType;dword SidStart"
-$tagACCESS_DENIED_OBJECT_ACE 			= "dword Mask;dword Flags;GUID ObjectType;GUID InheritedObjectType;dword SidStart"
+Global $tagACCESS_DENIED_ACE 					= "dword Mask;dword SidStart"
+Global $tagACCESS_DENIED_CALLBACK_ACE 			= "dword Mask;dword SidStart"
+Global $tagACCESS_DENIED_CALLBACK_OBJECT_ACE 	= "dword Mask;dword Flags;GUID ObjectType;GUID InheritedObjectType;dword SidStart"
+Global $tagACCESS_DENIED_OBJECT_ACE 			= "dword Mask;dword Flags;GUID ObjectType;GUID InheritedObjectType;dword SidStart"
 
 ;Unsupported
 ;SYSTEM_ALARM_ACE
@@ -16,14 +16,14 @@ $tagACCESS_DENIED_OBJECT_ACE 			= "dword Mask;dword Flags;GUID ObjectType;GUID I
 ;SYSTEM_ALARM_CALLBACK_OBJECT_ACE
 ;SYSTEM_ALARM_OBJECT_ACE
 
-$tagSYSTEM_AUDIT_ACE 					= "dword Mask;dword SidStart"
-$tagSYSTEM_AUDIT_CALLBACK_ACE 			= "dword Mask;dword SidStart"
-$tagSYSTEM_AUDIT_CALLBACK_OBJECT_ACE 	= "dword Mask;dword Flags;GUID ObjectType;GUID InheritedObjectType;dword SidStart"
-$tagSYSTEM_AUDIT_OBJECT_ACE 			= "dword Mask;dword Flags;GUID ObjectType;GUID InheritedObjectType;dword SidStart"
+Global $tagSYSTEM_AUDIT_ACE 					= "dword Mask;dword SidStart"
+Global $tagSYSTEM_AUDIT_CALLBACK_ACE 			= "dword Mask;dword SidStart"
+Global $tagSYSTEM_AUDIT_CALLBACK_OBJECT_ACE 	= "dword Mask;dword Flags;GUID ObjectType;GUID InheritedObjectType;dword SidStart"
+Global $tagSYSTEM_AUDIT_OBJECT_ACE 			= "dword Mask;dword Flags;GUID ObjectType;GUID InheritedObjectType;dword SidStart"
 
-$tagSYSTEM_MANDATORY_LABEL_ACE 			= "dword Mask;dword SidStart"
-$tagSYSTEM_RESOURCE_ATTRIBUTE_ACE 		= "dword Mask;dword SidStart"
-$tagSYSTEM_SCOPED_POLICY_ID_ACE 		= "dword Mask;dword SidStart"
+Global $tagSYSTEM_MANDATORY_LABEL_ACE 			= "dword Mask;dword SidStart"
+Global $tagSYSTEM_RESOURCE_ATTRIBUTE_ACE 		= "dword Mask;dword SidStart"
+Global $tagSYSTEM_SCOPED_POLICY_ID_ACE 		= "dword Mask;dword SidStart"
 #cs
 Global Const $GENERIC_READ = 0x80000000
 Global Const $GENERIC_WRITE = 0x4000000
@@ -132,7 +132,7 @@ Func _DecodeAceFlags($input)
 EndFunc
 
 Func _DecodeAceType($input)
-	Local $output = ""
+	;Local $output = ""
 	If $input = $ACCESS_ALLOWED_ACE_TYPE Then Return 'ACCESS_ALLOWED_ACE_TYPE'
 	If $input = $ACCESS_DENIED_ACE_TYPE Then Return 'ACCESS_DENIED_ACE_TYPE'
 	If $input = $SYSTEM_AUDIT_ACE_TYPE Then Return 'SYSTEM_AUDIT_ACE_TYPE'
@@ -186,8 +186,8 @@ Func _DecodeAceType($input)
 	Return $output
 EndFunc
 #ce
-$tagACL = "byte AclRevision;byte Sbz1;word AclSize;word AceCount;word Sbz2"
-$tagACE_HEADER = "byte AceType;byte AceFlags;word AceSize"
+Global $tagACL = "byte AclRevision;byte Sbz1;word AclSize;word AceCount;word Sbz2"
+Global $tagACE_HEADER = "byte AceType;byte AceFlags;word AceSize"
 
 
 
@@ -214,7 +214,7 @@ Func _SecurityDescriptorControl($input)
 EndFunc
 
 Func _DecodeAceObjectFlag($input)
-	Local $output = ""
+	;Local $output = ""
 	If $input = $ACE_NO_VALID_OBJECT_TYPE_PRESENT Then Return 'ACE_NO_VALID_OBJECT_TYPE_PRESENT'
 	If $input = $ACE_OBJECT_TYPE_PRESENT Then Return 'ACE_OBJECT_TYPE_PRESENT'
 	If $input = $ACE_INHERITED_OBJECT_TYPE_PRESENT Then Return 'ACE_INHERITED_OBJECT_TYPE_PRESENT'

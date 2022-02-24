@@ -7,7 +7,7 @@
 #AutoIt3Wrapper_Change2CUI=y
 #AutoIt3Wrapper_Res_Comment=Decode NTFS $Secure information ($SDS)
 #AutoIt3Wrapper_Res_Description=Decode NTFS $Secure information ($SDS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.9
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.10
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
 #AutoIt3Wrapper_AU3Check_Parameters=-w 3 -w 5
 #AutoIt3Wrapper_Run_Au3Stripper=y
@@ -46,7 +46,7 @@ Global Const $WS_VSCROLL = 0x00200000
 Global Const $DT_END_ELLIPSIS = 0x8000
 Global Const $GUI_DISABLE = 128
 
-Global $Progversion = "NTFS $Secure Parser - Secure2Csv - 1.0.0.9"
+Global $Progversion = "NTFS $Secure Parser - Secure2Csv - 1.0.0.10"
 
 If $cmdline[0] > 0 Then
 	$CommandlineMode = 1
@@ -66,10 +66,10 @@ Else
 	$ButtonSDS = GUICtrlCreateButton("Select $SDS", 430, 10, 100, 20)
 
 	$LabelSDH = GUICtrlCreateLabel("$SDH:",20,35,80,20)
-	$SDHField = GUICtrlCreateInput("optional, but recommended for speed",70,35,350,20)
+	$SDHField = GUICtrlCreateInput("Disabled",70,35,350,20)
 	GUICtrlSetState($SDHField, $GUI_DISABLE)
 	$ButtonSDH = GUICtrlCreateButton("Select $SDH", 430, 35, 100, 20)
-	;GUICtrlSetState($ButtonSDH, $GUI_DISABLE)
+	GUICtrlSetState($ButtonSDH, $GUI_DISABLE)
 
 	$LabelSII = GUICtrlCreateLabel("$SII:",20,60,80,20)
 	$SIIField = GUICtrlCreateInput("optional, but recommended for speed",70,60,350,20)
@@ -102,7 +102,7 @@ Else
 			Case $nMsg = $ButtonSDS
 				_SelectSDS()
 			Case $nMsg = $ButtonSDH
-				_SelectSDH()
+;				_SelectSDH()
 			Case $nMsg = $ButtonSII
 				_SelectSII()
 			Case $nMsg = $ButtonOutput
@@ -251,30 +251,59 @@ Func _Main()
 
 			$begin = TimerInit()
 			If Not $CommandlineMode Then AdlibRegister("_SDSProgress", 500)
+
+			Local $chunkChars = 0
+
+			Local $outFile1 = $OutputPath & "\Secure_"&$TimestampStart&"_sds_slack1.bin"
+			Local $hFileOut1 = _WinAPI_CreateFile("\\.\" & $outFile1, 3, 6, 7)
+			If $hFileOut1 Then
+				_GetSDSSlack1($hSDS, $hFileOut1)
+			EndIf
+			_WinAPI_CloseHandle($hFileOut1)
+
+			Local $outFile2 = $OutputPath & "\Secure_"&$TimestampStart&"_sds_slack2.bin"
+			Local $hFileOut2 = _WinAPI_CreateFile("\\.\" & $outFile2, 3, 6, 7)
+
 			$MaxDescriptors=Ubound($SIIArray)-1
-			For $i = 1 To Ubound($SIIArray)-1
+			For $i = 0 To Ubound($SIIArray)-1
 				$CurrentDescriptor=$i
 				;Retrieve information about where security descriptor is stored within $SDS
-				$TargetSDSOffset = Dec($SIIArray[$i][0])
-				$TargetSDSSize = Dec($SIIArray[$i][1])
+				$TargetSDSOffset = $SIIArray[$i][0]
+				$TargetSDSSize = $SIIArray[$i][1]
 				$TargetSDSChunk = StringMid($RawContentSDS,3+($TargetSDSOffset*2),$TargetSDSSize*2)
 				$TargetSDSOffsetHex = "0x"&Hex($TargetSDSOffset,8)
 				;Parse a given security descriptor
-				_DecodeSDSChunk($TargetSDSChunk, $SIIArray[$i][3])
+				$chunkChars = _DecodeSDSChunk($TargetSDSChunk, $SIIArray[$i][3])
+				If $TargetSDSSize - ($chunkChars/2) > 16 Then
+					;_DumpOutput("Dumping slack bytes from offset " & $TargetSDSOffset + $chunkChars/2  & @CRLF)
+					;_DumpOutput(_HexEncode("0x" & StringMid($TargetSDSChunk, 1 + $chunkChars)) & @CRLF)
+					_GetSDSSlack2($hFileOut2, StringMid($TargetSDSChunk, 1 + $chunkChars))
+				EndIf
 				;Write information to csv
 				_WriteCsv()
 				;Make sure all global variables for csv are cleared
 				_ClearVar()
 			Next
+
+			_WinAPI_CloseHandle($hFileOut2)
+
+			Local $outFile3 = $OutputPath & "\Secure_"&$TimestampStart&"_sds_slack3.bin"
+			Local $hFileOut3 = _WinAPI_CreateFile("\\.\" & $outFile3, 3, 6, 7)
+			_GetSDSSlack3($hSDS, $hFileOut3)
+			_WinAPI_CloseHandle($hFileOut3)
+
+			_DumpOutput("Slack output 1: " & $outFile1 & @CRLF)
+			_DumpOutput("Slack output 2: " & $outFile2 & @CRLF)
+			_DumpOutput("Slack output 3: " & $outFile3 & @CRLF)
+
 			If Not $CommandlineMode Then
 				AdlibUnRegister("_SDSProgress")
 				GUICtrlSetData($ProgressStatus, "[$SDS] Processing security descriptor " & $CurrentDescriptor & " of " & $MaxDescriptors)
 				GUICtrlSetData($ElapsedTime, "Elapsed time = " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)))
 				GUICtrlSetData($ProgressSDS, 100 * $CurrentDescriptor / $MaxDescriptors)
 				_DisplayInfo("$SDS processed " & $CurrentDescriptor & " descriptors in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
-			Else
-				_DumpOutput("$SDS processed " & $CurrentDescriptor & " descriptors in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
 			EndIf
+			_DumpOutput("$SDS processed " & $CurrentDescriptor & " descriptors in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
 
 			_WinAPI_CloseHandle($hSDS)
 			_WinAPI_CloseHandle($hSII)
@@ -422,9 +451,8 @@ Func _Main()
 				GUICtrlSetData($ElapsedTime, "Elapsed time = " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)))
 				GUICtrlSetData($ProgressSDS, 100 * $CurrentDescriptor / $MaxDescriptors)
 				_DisplayInfo("$SDS processed " & $CurrentDescriptor & " descriptors in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
-			Else
-				_DumpOutput("$SDS processed " & $CurrentDescriptor & " descriptors in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
 			EndIf
+			_DumpOutput("$SDS processed " & $CurrentDescriptor & " descriptors in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
 
 	EndSelect
 
@@ -441,6 +469,7 @@ Func _Main()
 EndFunc
 
 Func _DecodeSDSChunk($InputData, $Hash)
+	; return number of chars
 	;https://msdn.microsoft.com/en-us/library/cc230366.aspx
 	Local $StartOffset = 1
 	;Global $SecurityDescriptorHash,$SecurityId,$ControlText,$SidOwner,$SidGroup
@@ -450,7 +479,7 @@ Func _DecodeSDSChunk($InputData, $Hash)
 ;	$SecurityDescriptorHash = _SwapEndian($SecurityDescriptorHash)
 	If $SecurityDescriptorHash <> $Hash Then
 		_DumpOutput("Error: Hash mismatch" & @CRLF)
-		Return
+		Return 8
 	EndIf
 	$SecurityDescriptorHash = "0x" & $SecurityDescriptorHash
 
@@ -481,35 +510,42 @@ Func _DecodeSDSChunk($InputData, $Hash)
 
 	If Not BitAND("0x"&$SECURITY_DESCRIPTOR_CONTROL, $SE_SELF_RELATIVE) Then
 		_DumpOutput("Error: Descriptor not self relative. Nothing to do" & @CRLF)
-		Return
+		Return 48
 	EndIf
+
 	$PSidOwner = StringMid($InputData, $StartOffset + 48, 8)
 	$PSidOwner = _SwapEndian($PSidOwner)
-
 	$PSidOwner = Dec($PSidOwner)
+
 	$PSidGroup = StringMid($InputData, $StartOffset + 56, 8)
 	$PSidGroup = _SwapEndian($PSidGroup)
-
 	$PSidGroup = Dec($PSidGroup)
+
 	$PSacl = StringMid($InputData, $StartOffset + 64, 8)
 	$PSacl = _SwapEndian($PSacl)
-
 	$PSacl = Dec($PSacl)
+
 	$PDacl = StringMid($InputData, $StartOffset + 72, 8)
 	$PDacl = _SwapEndian($PDacl)
-
 	$PDacl = Dec($PDacl)
+
+	Local $length = 80, $count = 0
+
 	If $PSidOwner > 0 Then
+		$count = Dec(StringMid($InputData,$StartOffset+40+2+$PSidOwner*2, 2))
+		$length += 16 + ($count * 8)
 		$SidOwner = _DecodeSID(StringMid($InputData,$StartOffset+40+$PSidOwner*2))
 	EndIf
 	If $PSidGroup > 0 Then
+		$count = Dec(StringMid($InputData,$StartOffset+40+2+$PSidGroup*2, 2))
+		$length += 16 + ($count * 8)
 		$SidGroup = _DecodeSID(StringMid($InputData,$StartOffset+40+$PSidGroup*2))
 	EndIf
 	If $PSacl > 0 Then
-		_DecodeAcl_S(StringMid($InputData,$StartOffset+40+$PSacl*2))
+		$length += _DecodeAcl_S(StringMid($InputData,$StartOffset+40+$PSacl*2))
 	EndIf
 	If $PDacl > 0 Then
-		_DecodeAcl_D(StringMid($InputData,$StartOffset+40+$PDacl*2))
+		$length += _DecodeAcl_D(StringMid($InputData,$StartOffset+40+$PDacl*2))
 	EndIf
 	#cs
 	ConsoleWrite("$SecurityDescriptorHash: " & $SecurityDescriptorHash & @CRLF)
@@ -525,6 +561,7 @@ Func _DecodeSDSChunk($InputData, $Hash)
 	ConsoleWrite("$PSacl: " & $PSacl & @CRLF)
 	ConsoleWrite("$PDacl: " & $PDacl & @CRLF)
 	#ce
+	Return $length
 EndFunc
 
 Func _DecodeAcl_S($InputData)
@@ -557,7 +594,7 @@ Func _DecodeAcl_S($InputData)
 	ConsoleWrite("$SAceCount: " & $SAceCount & @CRLF)
 	ConsoleWrite("$Sbz2: " & $Sbz2 & @CRLF)
 	#ce
-	If $SAceCount < 1 Then Return
+	If $SAceCount < 1 Then Return 8
 	For $j = 1 To $SAceCount
 
 		;ACE_HEADER 4 bytes
@@ -584,8 +621,8 @@ Func _DecodeAcl_S($InputData)
 		EndIf
 		$AceSize = StringMid($InputData, $StartOffset + $AceDataCounter + 20, 4)
 		$AceSize = _SwapEndian($AceSize)
-
 		$AceSize = Dec($AceSize)
+
 		;Remaining bytes of ACE depends on AceType
 		$Mask=""
 		;$Flags=""
@@ -652,6 +689,7 @@ Func _DecodeAcl_S($InputData)
 		#ce
 		$AceDataCounter += $AceSize*2
 	Next
+	Return $AceDataCounter + 16
 EndFunc
 
 Func _DecodeAcl_D($InputData)
@@ -684,7 +722,7 @@ Func _DecodeAcl_D($InputData)
 	ConsoleWrite("$DAceCount: " & $DAceCount & @CRLF)
 	ConsoleWrite("$Sbz2: " & $Sbz2 & @CRLF)
 	#ce
-	If $DAceCount < 1 Then Return
+	If $DAceCount < 1 Then Return 8
 	For $j = 1 To $DAceCount
 
 		;ACE_HEADER 4 bytes
@@ -710,8 +748,8 @@ Func _DecodeAcl_D($InputData)
 		EndIf
 		$AceSize = StringMid($InputData, $StartOffset + $AceDataCounter + 20, 4)
 		$AceSize = _SwapEndian($AceSize)
-
 		$AceSize = Dec($AceSize)
+
 		;Remaining bytes of ACE depends on AceType
 		$Mask=""
 		;$Flags=""
@@ -780,6 +818,7 @@ Func _DecodeAcl_D($InputData)
 		#ce
 		$AceDataCounter += $AceSize*2
 	Next
+	Return $AceDataCounter + 16
 EndFunc
 
 Func _DecodeSID($InputData)
@@ -968,14 +1007,15 @@ Func _DecodeIndxEntriesSDH($InputData)
 EndFunc
 
 Func _DecodeIndxEntriesSII($InputData)
-	Local $StartOffset = 1, $Counter = 0
+	Local $StartOffset = 1, $Counter = 0;, $unk1
+	$StartOffset -= 16
 	Local $InputDataSize = BinaryLen("0x"&$InputData)
 	ReDim $SIIArray[100+1+$InputDataSize/40][5]
-	$SIIArray[0][0] = "OffsetInSDS"
-	$SIIArray[0][1] = "SizeInSDS"
-	$SIIArray[0][2] = "SecurityIdKey"
-	$SIIArray[0][3] = "SecurityDescriptorHashData"
-	$SIIArray[0][4] = "SecurityIdData"
+;	$SIIArray[0][0] = "OffsetInSDS"
+;	$SIIArray[0][1] = "SizeInSDS"
+;	$SIIArray[0][2] = "SecurityIdKey"
+;	$SIIArray[0][3] = "SecurityDescriptorHashData"
+;	$SIIArray[0][4] = "SecurityIdData"
 ;	ConsoleWrite("_DecodeIndxEntriesSII() " & @CRLF)
 ;	ConsoleWrite("Input size: " & BinaryLen("0x"&$InputData) & @CRLF)
 ;	ConsoleWrite("$InputData: " & @CRLF)
@@ -985,24 +1025,22 @@ Func _DecodeIndxEntriesSII($InputData)
 	$begin = TimerInit()
 	If Not $CommandlineMode Then AdlibRegister("_SIIProgress", 500)
 	While 1
-		If $StartOffset >= BinaryLen("0x"&$InputData)*2 Then ExitLoop
-		$Counter+=1
-		$CurrentDescriptor=$Counter
+		If $StartOffset >= $InputDataSize*2 Then ExitLoop
 
-		$DataOffset = StringMid($InputData, $StartOffset, 4)
-		$DataOffset = _SwapEndian($DataOffset)
-
-		$DataSize = StringMid($InputData, $StartOffset + 4, 4)
-		$DataSize = _SwapEndian($DataSize)
-
-		If $DataOffset = 0 Or $DataSize = 0 Then $StartOffset+=16
-
-		;Padding 4 bytes
 		$IndexEntrySize = StringMid($InputData, $StartOffset + 16, 4)
-		$IndexEntrySize = _SwapEndian($IndexEntrySize)
+		$IndexEntrySize = Dec(_SwapEndian($IndexEntrySize))
+
+		If $IndexEntrySize = 0 Then
+			$StartOffset += 16
+			ContinueLoop
+		EndIf
+		If $IndexEntrySize = 0x18 Then
+			$StartOffset += 80
+			ContinueLoop
+		EndIf
 
 		$IndexKeySize = StringMid($InputData, $StartOffset + 20, 4)
-		$IndexKeySize = _SwapEndian($IndexKeySize)
+		$IndexKeySize = Dec(_SwapEndian($IndexKeySize))
 
 		$Flags = StringMid($InputData, $StartOffset + 24, 4)
 		$Flags = _SwapEndian($Flags)
@@ -1018,20 +1056,14 @@ Func _DecodeIndxEntriesSII($InputData)
 		$SecurityIdData = _SwapEndian($SecurityIdData)
 
 		$OffsetInSDS = StringMid($InputData, $StartOffset + 56, 16)
-		$OffsetInSDS = _SwapEndian($OffsetInSDS)
+		$OffsetInSDS = Dec(_SwapEndian($OffsetInSDS))
 
 		$SizeInSDS = StringMid($InputData, $StartOffset + 72, 8)
-		$SizeInSDS = _SwapEndian($SizeInSDS)
+		$SizeInSDS = Dec(_SwapEndian($SizeInSDS))
 
-		$SIIArray[$Counter][0] = $OffsetInSDS
-		$SIIArray[$Counter][1] = $SizeInSDS
-		$SIIArray[$Counter][2] = $SecurityIdKey
-		$SIIArray[$Counter][3] = $SecurityDescriptorHashData
-		$SIIArray[$Counter][4] = $SecurityIdData
 		#cs
 		ConsoleWrite(@CRLF)
-		ConsoleWrite("$DataOffset: " & $DataOffset & @CRLF)
-		ConsoleWrite("$DataSize: " & $DataSize & @CRLF)
+		ConsoleWrite("Offset: 0x" & Hex(Int(($StartOffset+15)/2), 8) & @CRLF)
 		ConsoleWrite("$IndexEntrySize: " & $IndexEntrySize & @CRLF)
 		ConsoleWrite("$IndexKeySize: " & $IndexKeySize & @CRLF)
 		ConsoleWrite("$Flags: " & $Flags & @CRLF)
@@ -1041,8 +1073,29 @@ Func _DecodeIndxEntriesSII($InputData)
 		ConsoleWrite("$OffsetInSDS: " & $OffsetInSDS & @CRLF)
 		ConsoleWrite("$SizeInSDS: " & $SizeInSDS & @CRLF)
 		#ce
-		$StartOffset += 80
+
+		If $SizeInSDS = 0 Or Dec($SecurityIdKey) = 0 Or Dec($SecurityIdData) = 0 Then
+			;ConsoleWrite("Bad entry.." & @CRLF)
+			ExitLoop
+		EndIf
+
+		$SIIArray[$Counter][0] = $OffsetInSDS
+		$SIIArray[$Counter][1] = $SizeInSDS
+		$SIIArray[$Counter][2] = $SecurityIdKey
+		$SIIArray[$Counter][3] = $SecurityDescriptorHashData
+		$SIIArray[$Counter][4] = $SecurityIdData
+
+		If $IndexEntrySize = 0x10 Then
+			$StartOffset += 80
+		Else
+			; what's the deal about the 0x30 ones?
+			$StartOffset += $IndexEntrySize * 2
+		EndIf
+
+		$Counter += 1
+
 	WEnd
+	$CurrentDescriptor = $Counter
 	$MaxDescriptors = $CurrentDescriptor
 	If Not $CommandlineMode Then
 		AdlibUnRegister("_SIIProgress")
@@ -1050,10 +1103,119 @@ Func _DecodeIndxEntriesSII($InputData)
 		GUICtrlSetData($ElapsedTime, "Elapsed time = " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)))
 		GUICtrlSetData($ProgressSII, 100 * $CurrentDescriptor / $MaxDescriptors)
 		_DisplayInfo("$SII processing finished in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
+		_DisplayInfo("Sorting data. Please wait..." & @CRLF)
 	Else
 		_DumpOutput("$SII processing finished in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
+		_DumpOutput("Sorting data. Please wait..." & @CRLF)
 	EndIf
-	ReDim $SIIArray[$Counter+1][5]
+	ReDim $SIIArray[$Counter][5]
+	_ArraySort($SIIArray, 0, 0, 0, 0, 0)
+	$aUnique = _MyArrayUnique2($SIIArray, 0, 0)
+	_ArraySort($aUnique, 0, 0, 0, 0, 0)
+	_DumpOutput("Duplicate entries removed: " & UBound($SIIArray) - UBound($aUnique) & @CRLF)
+	$SIIArray = $aUnique
+	;_ArrayDisplay($SIIArray, "$SIIArray")
+EndFunc
+
+Func _GetSDSSlack1($hFile, $hFileOut)
+	Local $diff=0
+	;ConsoleWrite("_GetSDSSlack1(): " & @CRLF)
+	For $i = 0 To UBound($SIIArray) - 2
+		$diff = $SIIArray[$i + 1][0] - ($SIIArray[$i][0] + $SIIArray[$i][1])
+		;ConsoleWrite("$diff: " & $diff & @CRLF)
+		If $diff > 0x20 Then
+			;ConsoleWrite("Writing slack bytes: " & $diff & @CRLF)
+			_WriteFromOffset($hFile, $SIIArray[$i][0], $diff, $hFileOut)
+		EndIf
+	Next
+EndFunc
+
+Func _GetSDSSlack2($hFileOut, $inputData)
+	;ConsoleWrite("_GetSDSSlack2(): " & @CRLF)
+	Local $nBytes
+	Local $tBuffer = DllStructCreate("byte[" & StringLen($inputData)/2 & "]")
+	;ConsoleWrite("DllStructCreate: " & @error & @CRLF)
+	DllStructSetData($tBuffer, 1, "0x" & $inputData)
+	;ConsoleWrite("DllStructSetData: " & @error & @CRLF)
+	;ConsoleWrite("Writing bytes: " & DllStructGetSize($tBuffer) & @CRLF)
+	If Not _WinAPI_WriteFile($hFileOut, DllStructGetPtr($tBuffer), DllStructGetSize($tBuffer), $nBytes) Then
+		_DumpOutput("Error in WriteFile." & @CRLF)
+		Exit
+	EndIf
+EndFunc
+
+Func _GetSDSSlack3($hFile, $hFileOut)
+	;ConsoleWrite("_GetSDSSlack3(): " & @CRLF)
+
+	Local $filesize = _WinAPI_GetFileSizeEx($hFile)
+	Local $endOfData = $SIIArray[UBound($SIIArray) - 1][0] + $SIIArray[UBound($SIIArray) - 1][1]
+	Local $sectorOffset = $endOfData + (512 - Mod($endOfData, 512))
+	Local $diff = $filesize - $sectorOffset
+
+	;ConsoleWrite("$filesize: " & $filesize & @CRLF)
+	;ConsoleWrite("$endOfData: " & $endOfData & @CRLF)
+	;ConsoleWrite("$sectorOffset: " & $sectorOffset & @CRLF)
+	;ConsoleWrite("$diff: " & $diff & @CRLF)
+
+	If $diff < 1 Then
+		;ConsoleWrite("No slack to dump at the end" & @CRLF)
+		Return
+	EndIf
+
+	;ConsoleWrite("Writing last slack bytes from offset: " & $sectorOffset & @CRLF)
+	_WriteFromOffset($hFile, $sectorOffset, $diff, $hFileOut)
+
+EndFunc
+
+Func _WriteFromOffset($hFile, $offset, $size, $hFileOut)
+	Local $nBytes
+	_WinAPI_SetFilePointerEx($hFile, $offset, $FILE_BEGIN)
+	Local $tBuffer = DllStructCreate("byte[" & $size & "]")
+	;ConsoleWrite("DllStructCreate: " & @error & @CRLF)
+	If Not _WinAPI_ReadFile($hFile, DllStructGetPtr($tBuffer), $size, $nBytes) Then
+		_DumpOutput("Error in ReadFile." & @CRLF)
+		_WinAPI_CloseHandle($hFile)
+		Exit
+	EndIf
+	If Not _WinAPI_WriteFile($hFileOut, DllStructGetPtr($tBuffer), $size, $nBytes) Then
+		_DumpOutput("Error in WriteFile." & @CRLF)
+		_WinAPI_CloseHandle($hFile)
+		Exit
+	EndIf
+EndFunc
+
+Func _MyArrayUnique2(Const ByRef $aArray, $refColumn, $columnDataKeep)
+	; for multi dimensional arrays
+	; will be extremely slow for large arrays
+	; assume already sorted
+
+	Local $columns = UBound($aArray, 2)
+	Local $aNewArray[0][$columns]
+	Local $counter = 0, $Found
+
+	For $i = 0 To UBound($aArray) - 1
+
+		$Found = 0
+		For $j = 0 To UBound($aNewArray) - 1
+
+			If $aArray[$i][$refColumn] = $aNewArray[$j][$refColumn] Then
+				If $aArray[$i][$columnDataKeep] <> "" And $aNewArray[$j][$columnDataKeep] = "" Then
+					$aNewArray[$j][$columnDataKeep] = $aArray[$i][$columnDataKeep]
+				EndIf
+				$Found = 1
+				ExitLoop
+			EndIf
+		Next
+
+		If $Found = 0 Then
+			$counter += 1
+			ReDim $aNewArray[$counter][$columns]
+			For $j = 0 To $columns - 1
+				$aNewArray[$counter - 1][$j] = $aArray[$i][$j]
+			Next
+		EndIf
+	Next
+	Return $aNewArray
 EndFunc
 
 Func _SwapEndian($iHex)
@@ -1097,7 +1259,7 @@ Func _GetIndx($Entry)
 ;	$NextPosition = 1
 	Do
 		If $NextPosition >= StringLen($Entry) Then ExitLoop
-;		ConsoleWrite("$NextPosition = " & $NextPosition & @crlf)
+;		ConsoleWrite("$NextPosition = " & $NextPosition/2 & @crlf)
 		$IndxHdrMagic = StringMid($Entry,$NextPosition,8)
 ;		ConsoleWrite("$IndxHdrMagic = " & $IndxHdrMagic & @crlf)
 		$IndxHdrMagic = _HexToString($IndxHdrMagic)
@@ -1109,6 +1271,7 @@ Func _GetIndx($Entry)
 			ContinueLoop
 		EndIf
 		$IndxEntries = _StripIndxRecord(StringMid($Entry,$NextPosition,8192))
+;		ConsoleWrite(_HexEncode("0x"&$IndxEntries) & @crlf)
 		$TotalIndxEntries &= $IndxEntries
 		$NextPosition += 8192
 	Until $NextPosition >= StringLen($Entry);+32
@@ -1160,8 +1323,15 @@ Func _StripIndxRecord($Entry)
 ;	ConsoleWrite("$IndxRecordSize = " & $IndxRecordSize & @crlf)
 	$IndxHeaderSize = Dec(_SwapEndian(StringMid($Entry,$LocalAttributeOffset+48,8)),2)
 ;	ConsoleWrite("$IndxHeaderSize = " & $IndxHeaderSize & @crlf)
+	If $IndxHeaderSize = 0x28 Then
+		$IndxHeaderSize += 0x8
+		$IndxRecordSize -= 0x10
+	EndIf
+;	ConsoleWrite("$IndxRecordSize = 0x" & Hex($IndxRecordSize, 4) & @crlf)
+;	ConsoleWrite("$IndxHeaderSize = 0x" & Hex($IndxHeaderSize, 4) & @crlf)
 	$IsNotLeafNode = StringMid($Entry,$LocalAttributeOffset+72,2) ;1 if not leaf node
-	$Entry = StringMid($Entry,$LocalAttributeOffset+48+($IndxHeaderSize*2),($IndxRecordSize-$IndxHeaderSize-16)*2)
+	;$Entry = StringMid($Entry,$LocalAttributeOffset+48+($IndxHeaderSize*2),($IndxRecordSize-$IndxHeaderSize-16)*2)
+	$Entry = StringMid($Entry,$LocalAttributeOffset+48+($IndxHeaderSize*2),($IndxRecordSize)*2)
 	If $IsNotLeafNode = "01" Then  ; This flag leads to the entry being 8 bytes of 00's longer than the others. Can be stripped I think.
 		$Entry = StringTrimRight($Entry,16)
 ;		ConsoleWrite("Is not leaf node..." & @crlf)
@@ -1299,7 +1469,7 @@ Func _GetInputParams()
 	For $i = 1 To $cmdline[0]
 		;ConsoleWrite("Param " & $i & ": " & $cmdline[$i] & @CRLF)
 		If StringLeft($cmdline[$i],9) = "/SDSFile:" Then $SDSFile = StringMid($cmdline[$i],10)
-		If StringLeft($cmdline[$i],9) = "/SDHFile:" Then $SDHFile = StringMid($cmdline[$i],10)
+		;If StringLeft($cmdline[$i],9) = "/SDHFile:" Then $SDHFile = StringMid($cmdline[$i],10)
 		If StringLeft($cmdline[$i],9) = "/SIIFile:" Then $SIIFile = StringMid($cmdline[$i],10)
 		If StringLeft($cmdline[$i],12) = "/OutputPath:" Then $OutputPath = StringMid($cmdline[$i],13)
 		If StringLeft($cmdline[$i],11) = "/Separator:" Then $SeparatorInput = StringMid($cmdline[$i],12)

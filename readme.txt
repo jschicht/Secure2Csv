@@ -31,7 +31,6 @@ In the output the exist 2 sets of the same type of variables, where the ones pre
 About output
 All output will be prefixed with a timestamp, and written to same directory as program is launched from.
 The csv contains all the decoded security descriptors found in $SDS. See section about the explanation of output variables.
-When $SDH or $SII are chosen, the core INDX entries with fixups applied, are written to a separate file.
 
 
 Explanation of output variables:
@@ -66,7 +65,7 @@ DAceSIDofTrustee: The SID of a trustee.
 
 
 Usage
-The gui is quite intuitive. An $SDS file is mandatory. Supplying either $SDH or $SII as input will speed up the processing due to the format of $SDS which contains 2 sets of all descriptors. There's an option to specify output directory.
+The gui is quite intuitive. An $SDS file is mandatory. Supplying also $SII as input will speed up the processing due to the format of $SDS which contains 2 sets of all descriptors. There's an option to specify output directory.
 It is possible to specify the default output variable separator, as well as the ACE separator which must be different than the other one (see explanation above for why there will be several ACE's).
 
 Command line use
@@ -75,8 +74,6 @@ If no parameters are supplied, the GUI will by default launch. Valid switches ar
 Switches:
 /SDSFile:
 Target $SDS file. Mandatory.
-/SDHFile:
-Target $SDH file. Optional.
 /SIIFile:
 Target $SII file. Optional.
 /OutputPath:
@@ -90,6 +87,17 @@ Examples:
 Secure2Csv.exe /SDSFile:c:\temp\$Secure[ADS_$SDS] /OutputPath:c:\temp
 Secure2Csv.exe /SDSFile:c:\temp\$Secure[ADS_$SDS] /SIIFile:c:\temp\$Secure_9_$INDEX_ALLOCATION_$SII.bin /OutputPath:c:\temp
 Secure2Csv.exe /SDSFile:c:\temp\$Secure[ADS_$SDS] /OutputPath:c:\temp /Separator:% /AceSeparator:!
+
+
+Slack data
+There are various location in the $SDS file where slack data can be found. For this tool to extract slack, the $SII is needed on input along with $SDS. The slack is extracted to 3 different files, those ending with _sds_slack1.bin, _sds_slack2.bin and _sds_slack3.bin.
+
+Slack1 is the data between entries found by using the valid and defined entry offsets and sizes.
+Slack2 is the data found within an entry where the defined entry size is larger than what is actually used.
+Slack3 is the data found beyond the last valid entry, aligned to sector size.
+
+Slack1 and slack2 are smaller chunks merged together, whereas slack3 is more suitable for traditional carving due to offsets from the FS being preserved.
+
 
 Note
 The file $Secure[ADS_$SDS] and $Secure_9_$INDEX_ALLOCATION_$SII.bin are the two of default output when using RawCopy (https://github.com/jschicht/RawCopy) to extract mft ref 9 with a command such as "rawcopy.exe c:9 c:\temp -AllAttr"
